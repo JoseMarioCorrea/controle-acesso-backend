@@ -37,8 +37,7 @@ console.log('MySQL config:', {
       database: process.env.DB_DATABASE,
       synchronize: true,
       autoLoadEntities: true,
-      entities: [User, Department, Schedule, Holiday, IdfaceModule],
-      
+      entities: [User, Department, Schedule, Holiday, IdfaceModule], 
     }),
     UsersModule, DepartmentsModule, SchedulesModule,
     HolidaysModule, AlarmsModule,
