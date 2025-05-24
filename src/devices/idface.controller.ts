@@ -3,12 +3,25 @@ import {
   Post,
   Get,
   Body,
-  Query,
-  BadRequestException,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { IdfaceService } from './idface.service';
+import { SetTimeDto } from './dto/set-time.dto';
+import { SetNetworkDto } from './dto/set-network.dto';
+import { SetVPNInfoDto } from './dto/set-vpn-info.dto';
+import { UploadVpnFileDto } from './dto/upload-vpn-file.dto';
+import { GpioStateDto } from './dto/gpio-state.dto';
+import {
+  SetUserAuthenticationDto,
+  SetUserDeviceDto,
+  SetUserGroupDto,
+  SetUserAccessScheduleDto,
+  DeleteUserDto,
+} from './dto/user-config.dto';
 
 @Controller('idface')
+@UsePipes(new ValidationPipe({ whitelist: true }))
 export class IdfaceController {
   constructor(private readonly idfaceService: IdfaceService) {}
 
@@ -38,47 +51,59 @@ export class IdfaceController {
   }
 
   @Post('time')
-  setTime(@Body('datetime') datetime: string) {
-    if (!datetime) throw new BadRequestException('datetime é obrigatório');
-    return this.idfaceService.setSystemTime(datetime);
+  setTime(@Body() body: SetTimeDto) {
+    return this.idfaceService.setSystemTime(body.datetime);
   }
 
   @Post('network')
-  setNetwork(@Body() config: {
-    ip: string;
-    mask: string;
-    gateway: string;
-    dns: string;
-    hostname: string;
-  }) {
+  setNetwork(@Body() config: SetNetworkDto) {
     return this.idfaceService.setNetwork(config);
   }
 
   @Post('vpn/config')
-  setVPNInfo(@Body() info: {
-    server: string;
-    port: number;
-    proto: string;
-    username: string;
-    password: string;
-  }) {
+  setVPNInfo(@Body() info: SetVPNInfoDto) {
     return this.idfaceService.setVPNInfo(info);
   }
 
   @Post('vpn/upload-config')
-  sendConfigFile(@Body('file') file: string) {
-    if (!file) throw new BadRequestException('Arquivo em base64 é obrigatório');
-    return this.idfaceService.sendVPNFile(file, 'config');
+  sendConfigFile(@Body() body: UploadVpnFileDto) {
+    return this.idfaceService.sendVPNFile(body.file, 'config');
   }
 
   @Post('vpn/upload-zip')
-  sendZipFile(@Body('file') file: string) {
-    if (!file) throw new BadRequestException('Arquivo em base64 é obrigatório');
-    return this.idfaceService.sendVPNFile(file, 'zip');
+  sendZipFile(@Body() body: UploadVpnFileDto) {
+    return this.idfaceService.sendVPNFile(body.file, 'zip');
   }
 
   @Post('gpio')
-  getGpioState() {
-    return this.idfaceService.gpioState();
+  getGpioState(@Body() body: GpioStateDto) {
+    return this.idfaceService.gpioState(body.gpio);
+  }
+
+  // --- Métodos com device_id ---
+
+  @Post('user/authentication')
+  setUserAuthentication(@Body() body: SetUserAuthenticationDto) {
+    return this.idfaceService.setUserAuthentication(body);
+  }
+
+  @Post('user/device')
+  setUserDevice(@Body() body: SetUserDeviceDto) {
+    return this.idfaceService.setUserDevice(body);
+  }
+
+  @Post('user/group')
+  setUserGroup(@Body() body: SetUserGroupDto) {
+    return this.idfaceService.setUserGroup(body);
+  }
+
+  @Post('user/schedule')
+  setUserAccessSchedule(@Body() body: SetUserAccessScheduleDto) {
+    return this.idfaceService.setUserAccessSchedule(body);
+  }
+
+  @Post('user/delete')
+  deleteUser(@Body() body: DeleteUserDto) {
+    return this.idfaceService.deleteUser(body);
   }
 }

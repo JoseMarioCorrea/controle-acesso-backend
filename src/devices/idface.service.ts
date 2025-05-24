@@ -11,19 +11,24 @@ export class IdfaceService {
     this.client = axios.create({
       baseURL: process.env.IDFACE_BASE_URL || 'http://192.168.0.100',
       headers: { 'Content-Type': 'application/json' },
-      auth: {
-        username: process.env.IDFACE_USER || 'admin',
-        password: process.env.IDFACE_PASS || 'admin',
-      },
     });
   }
 
+  private resolveDeviceId(device_id?: number): number {
+    return device_id ?? parseInt(process.env.IDFACE_DEVICE_ID || '1', 10);
+  }
+
   async login(): Promise<string> {
-    const res = await this.client.post('/login.fcgi');
+    const res = await this.client.post('/login.fcgi', {
+      login: process.env.IDFACE_USER || 'admin',
+      password: process.env.IDFACE_PASS || 'admin',
+    });
+
     if (res.data?.session) {
       this.session = res.data.session;
-      return this.session?? 'error';
+      return this.session as string;
     }
+
     throw new HttpException('Falha ao autenticar com o iDFace', HttpStatus.UNAUTHORIZED);
   }
 
@@ -35,49 +40,46 @@ export class IdfaceService {
 
   async sessionIsValid(): Promise<boolean> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/session_is_valid.fcgi', {
-      session: this.session,
-    });
+    const res = await this.client.post(`/session_is_valid.fcgi?session=${this.session}`);
     return res.data?.success === true;
   }
 
   async reboot(): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/reboot.fcgi', {
-      session: this.session,
-    });
+    const res = await this.client.post(`/reboot.fcgi?session=${this.session}`);
     return res.data;
   }
 
   async factoryReset(): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/reset_to_factory_default.fcgi', {
-      session: this.session,
-    });
+    const res = await this.client.post(`/reset_to_factory_default.fcgi?session=${this.session}`);
     return res.data;
   }
 
-  async setSystemTime(date: string): Promise<any> {
+  async setSystemTime(datetimeISO: string): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/set_system_time.fcgi', {
-      session: this.session,
-      datetime: date,
-    });
+    const dt = new Date(datetimeISO);
+    const payload = {
+      day: dt.getUTCDate(),
+      month: dt.getUTCMonth() + 1,
+      year: dt.getUTCFullYear(),
+      hour: dt.getUTCHours(),
+      minute: dt.getUTCMinutes(),
+      second: dt.getUTCSeconds(),
+    };
+    const res = await this.client.post(`/set_system_time.fcgi?session=${this.session}`, payload);
     return res.data;
   }
 
   async setNetwork(config: {
     ip: string;
-    mask: string;
+    netmask: string;
     gateway: string;
     dns: string;
     hostname: string;
   }): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/set_system_network.fcgi', {
-      session: this.session,
-      ...config,
-    });
+    const res = await this.client.post(`/set_system_network.fcgi?session=${this.session}`, config);
     return res.data;
   }
 
@@ -89,26 +91,93 @@ export class IdfaceService {
     password: string;
   }): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/set_vpn_information.fcgi', {
-      session: this.session,
-      ...info,
-    });
+    const res = await this.client.post(`/set_vpn_information.fcgi?session=${this.session}`, info);
     return res.data;
   }
 
   async sendVPNFile(fileBase64: string, fileType: 'zip' | 'config'): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post(`/set_vpn_file.fcgi?session=${this.session}&file_type=${fileType}`, {
-      file: fileBase64,
-    });
+    const res = await this.client.post(
+      `/set_vpn_file.fcgi?session=${this.session}&file_type=${fileType}`,
+      { file: fileBase64 }
+    );
     return res.data;
   }
 
-  async gpioState(): Promise<any> {
+  async gpioState(gpio: number = 11): Promise<any> {
     if (!this.session) await this.login();
-    const res = await this.client.post('/gpio_state.fcgi', {
-      session: this.session,
-    });
+    const res = await this.client.post(`/gpio_state.fcgi?session=${this.session}`, { gpio });
+    return res.data;
+  }
+
+  async setUserAuthentication(data: {
+    user_id: number;
+    auth_mode: number;
+    device_id?: number;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = {
+      user_id: data.user_id,
+      auth_mode: data.auth_mode,
+      device_id: this.resolveDeviceId(data.device_id),
+    };
+    const res = await this.client.post(`/set_user_authentication.fcgi?session=${this.session}`, payload);
+    return res.data;
+  }
+
+  async setUserDevice(data: {
+    user_id: number;
+    device_id?: number;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = {
+      user_id: data.user_id,
+      device_id: this.resolveDeviceId(data.device_id),
+    };
+    const res = await this.client.post(`/set_user_device.fcgi?session=${this.session}`, payload);
+    return res.data;
+  }
+
+  async setUserGroup(data: {
+    user_id: number;
+    group_id: number;
+    device_id?: number;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = {
+      user_id: data.user_id,
+      group_id: data.group_id,
+      device_id: this.resolveDeviceId(data.device_id),
+    };
+    const res = await this.client.post(`/set_user_groups.fcgi?session=${this.session}`, payload);
+    return res.data;
+  }
+
+  async setUserAccessSchedule(data: {
+    user_id: number;
+    schedule_id: number;
+    device_id?: number;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = {
+      user_id: data.user_id,
+      schedule_id: data.schedule_id,
+      device_id: this.resolveDeviceId(data.device_id),
+    };
+    const res = await this.client.post(`/set_user_access_schedule.fcgi?session=${this.session}`, payload);
+    return res.data;
+  }
+
+  async deleteUser(data: {
+    user_id: number;
+    device_id?: number;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = {
+      user_id: data.user_id,
+      device_id: this.resolveDeviceId(data.device_id),
+    };
+    const res = await this.client.post(`/delete_user.fcgi?session=${this.session}`, payload);
     return res.data;
   }
 }

@@ -37,14 +37,21 @@ console.log('MySQL config:', {
       database: process.env.DB_DATABASE,
       synchronize: true,
       autoLoadEntities: true,
-      entities: [User, Department, Schedule, Holiday, IdfaceModule], 
+      entities: [User, Department, Schedule, Holiday],
     }),
-    UsersModule, DepartmentsModule, SchedulesModule,
-    HolidaysModule, AlarmsModule,
-    ReportsModule, SystemModule,
-    NetworkModule, AuthModule
+    UsersModule,
+    DepartmentsModule,
+    SchedulesModule,
+    HolidaysModule,
+    AlarmsModule,
+    ReportsModule,
+    SystemModule,
+    NetworkModule,
+    AuthModule,
+    IdfaceModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
+
