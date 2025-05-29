@@ -17,6 +17,8 @@ import { Schedule } from './schedules/schedule.entity';
 import { Holiday } from './holidays/holiday.entity';
 import { IdfaceModule } from './devices/idface.module';
 import * as dotenv from 'dotenv';
+import { Pessoa } from './pessoa/pessoa.entity';
+import { PessoaModule } from './pessoa/pessoa.module';
 dotenv.config();
 
 console.log('MySQL config:', {
@@ -37,7 +39,7 @@ console.log('MySQL config:', {
       database: process.env.DB_DATABASE,
       synchronize: true,
       autoLoadEntities: true,
-      entities: [User, Department, Schedule, Holiday],
+      entities: [User, Department, Schedule, Holiday, Pessoa],
     }),
     UsersModule,
     DepartmentsModule,
@@ -49,6 +51,7 @@ console.log('MySQL config:', {
     NetworkModule,
     AuthModule,
     IdfaceModule,
+    PessoaModule
   ],
   controllers: [AppController],
   providers: [AppService],

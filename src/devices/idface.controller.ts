@@ -1,3 +1,4 @@
+// src/devices/idface.controller.ts
 import {
   Controller,
   Post,
@@ -80,9 +81,9 @@ export class IdfaceController {
     return this.idfaceService.gpioState(body.gpio);
   }
 
-  // --- Métodos com device_id ---
+  // --- Métodos de configuração de usuário ---
 
-  @Post('user/authentication')
+ /* @Post('user/authentication')
   setUserAuthentication(@Body() body: SetUserAuthenticationDto) {
     return this.idfaceService.setUserAuthentication(body);
   }
@@ -105,5 +106,66 @@ export class IdfaceController {
   @Post('user/delete')
   deleteUser(@Body() body: DeleteUserDto) {
     return this.idfaceService.deleteUser(body);
+  }*/
+
+  // --- Novos endpoints para criação de objetos ---
+
+  @Post('user/create')
+  createUser(@Body() body: { name: string; registration?: string; password?: string; salt?: string }) {
+    return this.idfaceService.createUser(body);
+  }
+
+  @Post('group/create')
+  createGroup(@Body() body: { name: string }) {
+    return this.idfaceService.createGroup(body.name);
+  }
+
+  @Post('user-group/create')
+  createUserGroup(@Body() body: { user_id: number; group_id: number }) {
+    return this.idfaceService.createUserGroup(body.user_id, body.group_id);
+  }
+
+  @Post('user-group/load')
+  loadUserGroup(@Body() body: { user_id: number; group_id: number }) {
+    return this.idfaceService.loadUserGroup(body.user_id, body.group_id);
+  }
+
+  @Post('access-rule/create')
+  createAccessRule(@Body() body: { name: string }) {
+    return this.idfaceService.createAccessRule(body.name);
+  }
+
+  @Post('group-access-rule/create')
+  createGroupAccessRule(@Body() body: { group_id: number; access_rule_id: number }) {
+    return this.idfaceService.createGroupAccessRule(body.group_id, body.access_rule_id);
+  }
+
+  @Post('time-zone/create')
+  createTimeZone(@Body() body: { name: string }) {
+    return this.idfaceService.createTimeZone(body.name);
+  }
+
+  @Post('time-span/create')
+  createTimeSpan(@Body() body: {
+    time_zone_id: number;
+    start: number;
+    end: number;
+    sun: number;
+    mon: number;
+    tue: number;
+    wed: number;
+    thu: number;
+    fri: number;
+    sat: number;
+    hol1: number;
+    hol2: number;
+    hol3: number;
+  }) {
+    return this.idfaceService.createTimeSpan(body);
+  }
+
+  @Post('access-rule-time-zone/create')
+  createAccessRuleTimeZone(@Body() body: { access_rule_id: number; time_zone_id: number }) {
+    return this.idfaceService.createAccessRuleTimeZone(body.access_rule_id, body.time_zone_id);
   }
 }

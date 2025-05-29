@@ -1,15 +1,16 @@
-
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import axios, { AxiosInstance } from 'axios';
-
+import * as fs from 'fs';
+import * as path from 'path';
 @Injectable()
 export class IdfaceService {
+  [x: string]: any;
   private client: AxiosInstance;
   private session: string | null = null;
 
   constructor() {
     this.client = axios.create({
-      baseURL: process.env.IDFACE_BASE_URL || 'http://192.168.0.100',
+      baseURL: process.env.IDFACE_BASE_URL || 'http://192.168.18.63',
       headers: { 'Content-Type': 'application/json' },
     });
   }
@@ -110,6 +111,110 @@ export class IdfaceService {
     return res.data;
   }
 
+  async createObject(object: string, values: any[]): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = { object, values };
+    return (await this.client.post(`/create_objects.fcgi?session=${this.session}`, payload)).data;
+  }
+
+  async createUser(user: {
+    name: string;
+    registration?: string;
+    password?: string;
+    salt?: string;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+
+    const payload = {
+      object: 'users',
+      values: [
+        {
+          name: user.name,
+          registration: user.registration ?? '',
+          password: user.password ?? '',
+          salt: user.salt ?? ''
+        }
+      ]
+    };
+
+    console.log('Enviando payload de createUser:', payload);
+
+    const res = await this.client.post(`/create_objects.fcgi?session=${this.session}`, payload);
+    return res.data;
+  }
+
+  async createGroup(name: string): Promise<any> {
+    return this.createObject('groups', [{ name }]);
+  }
+
+  async loadGroup(name: string): Promise<any> {
+    return this.createObject('groups', [{ name }]);
+  }
+
+  async createUserGroup(user_id: number, group_id: number): Promise<any> {
+    console.log(`TESTE ${user_id} ${group_id}`);
+
+    if (!user_id || !group_id) {
+      throw new HttpException('Parâmetros user_id e group_id são obrigatórios', HttpStatus.BAD_REQUEST);
+    }
+
+    return this.createObject('user_groups', [
+      { user_id, group_id }
+    ]);
+  }
+
+  async createAccessRule(name: string): Promise<any> {
+    return this.createObject('access_rules', [{
+      name,
+      type: 1,        // tipo padrão (1 = acesso liberado)
+      priority: 0     // prioridade padrão
+    }]);
+  }
+
+
+  async createGroupAccessRule(group_id: number, access_rule_id: number): Promise<any> {
+    return this.createObject('group_access_rules', [{ group_id, access_rule_id }]);
+  }
+
+  async createTimeZone(name: string): Promise<any> {
+    return this.createObject('time_zones', [{ name }]);
+  }
+
+  async createTimeSpan(
+    data: {
+      time_zone_id: number;
+      start: number;
+      end: number;
+      sun: number;
+      mon: number;
+      tue: number;
+      wed: number;
+      thu: number;
+      fri: number;
+      sat: number;
+      hol1: number;
+      hol2: number;
+      hol3: number;
+    }): Promise<any> {
+    return this.createObject('time_spans', [data]);
+  }
+
+  async createAccessRuleTimeZone(access_rule_id: number, time_zone_id: number): Promise<any> {
+    return this.createObject('access_rule_time_zones', [{ access_rule_id, time_zone_id }]);
+  }
+
+  async deleteUser(data: {
+    user_id: number;
+    device_id?: number;
+  }): Promise<any> {
+    if (!this.session) await this.login();
+    const payload = {
+      user_id: data.user_id,
+      device_id: this.resolveDeviceId(data.device_id),
+    };
+    const res = await this.client.post(`/delete_user.fcgi?session=${this.session}`, payload);
+    return res.data;
+  }
   async setUserAuthentication(data: {
     user_id: number;
     auth_mode: number;
@@ -141,15 +246,16 @@ export class IdfaceService {
   async setUserGroup(data: {
     user_id: number;
     group_id: number;
-    device_id?: number;
   }): Promise<any> {
     if (!this.session) await this.login();
+    if (!data.user_id || !data.group_id) {
+      throw new HttpException('Parâmetros user_id e group_id são obrigatórios', HttpStatus.BAD_REQUEST);
+    }
     const payload = {
       user_id: data.user_id,
       group_id: data.group_id,
-      device_id: this.resolveDeviceId(data.device_id),
     };
-    const res = await this.client.post(`/set_user_groups.fcgi?session=${this.session}`, payload);
+    const res = await this.client.post(`/set_user_group.fcgi?session=${this.session}`, payload);
     return res.data;
   }
 
@@ -168,16 +274,40 @@ export class IdfaceService {
     return res.data;
   }
 
-  async deleteUser(data: {
-    user_id: number;
-    device_id?: number;
-  }): Promise<any> {
-    if (!this.session) await this.login();
-    const payload = {
-      user_id: data.user_id,
-      device_id: this.resolveDeviceId(data.device_id),
-    };
-    const res = await this.client.post(`/delete_user.fcgi?session=${this.session}`, payload);
+  async setUserImage(user_id: number, foto: Express.Multer.File): Promise<any> {
+
+    const res = await this.client.post(
+      `/user_set_image.fcgi?session=${this.session}&user_id=${user_id}`,
+      foto.buffer,
+      {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+      },
+    );
     return res.data;
   }
+
+  async updateUserImage(user_id: number, imageBuffer: Buffer): Promise<any> {
+    if (!this.session) await this.login();
+    const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp
+    const res = await this.client.post(
+      `/user_set_image.fcgi?session=${this.session}&user_id=${user_id}&timestamp=${timestamp}&match=0`,
+      imageBuffer,
+      {
+        headers: {
+          'Content-Type': 'application/octet-stream',
+        },
+      },
+    );
+
+    if (res.data?.success === false) {
+      const reasons = res.data.errors?.map((e: any) => `(${e.code}) ${e.message}`).join('; ');
+      throw new Error(`Falha ao cadastrar imagem do usuário ${user_id}: ${reasons}`);
+    }
+
+    return res.data;
+  }
+
+
 }
