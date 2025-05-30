@@ -215,6 +215,21 @@ export class IdfaceService {
     const res = await this.client.post(`/delete_user.fcgi?session=${this.session}`, payload);
     return res.data;
   }
+  async deleteUserIdface(user_id: number): Promise<void> {
+    await this.login();
+
+    // 1. Exclui foto facial vinculada
+    await this.client.post(`/user_destroy_image.fcgi?session=${this.session}`, {
+      user_id,
+    });
+
+    // 2. Exclui objeto do tipo user
+    await this.client.post(`/destroy_objects.fcgi?session=${this.session}`, {
+      object: 'users',
+      values: [{ id: user_id }]
+    });
+  }
+
   async setUserAuthentication(data: {
     user_id: number;
     auth_mode: number;

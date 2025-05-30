@@ -9,10 +9,11 @@ import * as path from 'path';
 
 @Injectable()
 export class PessoasService {
+  idfaceService: any;
   constructor(
     @InjectRepository(Pessoa)
     private readonly repo: Repository<Pessoa>,
-  ) {}
+  ) { }
 
   async create(dto: CreatePessoaDto, foto?: Express.Multer.File): Promise<Pessoa> {
     const novaPessoa = this.repo.create(dto);
@@ -32,4 +33,23 @@ export class PessoasService {
 
     return this.repo.save(novaPessoa);
   }
+  async findAll(): Promise<Pessoa[]> {
+    return this.repo.find(); // ajuste conforme seu repositório
+  }
+  async delete(id: number): Promise<void> {
+    const pessoa = await this.repo.findOne({ where: { id } });
+
+    if (!pessoa) {
+      throw new Error('Pessoa não encontrada');
+    }
+
+    // Remove do iDFace se tiver user_id associado
+    if (pessoa.userIdIdface) {
+      await this.idfaceService.login();
+      await this.idfaceService.deleteUserIdface(pessoa.userIdIdface);
+    }
+
+    await this.repo.delete(id);
+  }
+
 }

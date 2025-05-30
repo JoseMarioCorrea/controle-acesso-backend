@@ -32,4 +32,5 @@ export class Pessoa {
 
   @UpdateDateColumn()
   atualizadoEm: Date;
+  userIdIdface: any;
 }

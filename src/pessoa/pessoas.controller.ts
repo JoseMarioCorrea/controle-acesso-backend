@@ -6,6 +6,10 @@ import {
   UploadedFile,
   UseInterceptors,
   Logger,
+  Get,
+  Delete,
+  Param,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PessoasService } from './pessoas.service';
@@ -122,4 +126,16 @@ export class PessoasController {
       },
     };
   }
+  @Get()
+  async listarTodas() {
+    const pessoas = await this.pessoasService.findAll();
+    return pessoas;
+  }
+
+  @Delete(':id')
+  async deletar(@Param('id', ParseIntPipe) id: number) {
+    await this.pessoasService.delete(id);
+    return { mensagem: 'Pessoa excluída com sucesso' };
+  }
+
 }
