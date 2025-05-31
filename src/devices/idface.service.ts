@@ -224,10 +224,16 @@ export class IdfaceService {
     });
 
     // 2. Exclui objeto do tipo user
-    await this.client.post(`/destroy_objects.fcgi?session=${this.session}`, {
-      object: 'users',
-      values: [{ id: user_id }]
-    });
+    const deleteFoto = await this.deleteUserImage(user_id);
+    this.logger.log(`Foto do usuário ${user_id} excluída: ${deleteFoto}`);
+  }
+  async deleteUserImage(user_id: number): Promise<any> {
+    if (!this.session) await this.login();
+    const res = await this.client.post(
+      `/user_destroy_image.fcgi?session=${this.session}`,
+      { user_id }
+    );
+    return res.data;
   }
 
   async setUserAuthentication(data: {

@@ -10,6 +10,7 @@ import {
   Delete,
   Param,
   ParseIntPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PessoasService } from './pessoas.service';
@@ -133,9 +134,19 @@ export class PessoasController {
   }
 
   @Delete(':id')
-  async deletar(@Param('id', ParseIntPipe) id: number) {
+  async deletePessoa(@Param('id') id: number) {
+    const pessoa = await this.pessoasService.findById(id);
+    if (!pessoa) throw new NotFoundException('Pessoa não encontrada');
+
+    if (pessoa.idfaceUserId) {
+      await this.idfaceService.login();
+      await this.idfaceService.deleteUser({ user_id: pessoa.idfaceUserId });
+      await this.idfaceService.deleteUserImage(pessoa.idfaceUserId); // se quiser apagar a foto
+    }
+
     await this.pessoasService.delete(id);
-    return { mensagem: 'Pessoa excluída com sucesso' };
+    return { message: 'Pessoa removida com sucesso do sistema e do iDFace' };
   }
+
 
 }

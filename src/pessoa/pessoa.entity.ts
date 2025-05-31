@@ -27,10 +27,13 @@ export class Pessoa {
   @Column({ nullable: true })
   fotoUrl: string;
 
+  @Column({ nullable: true })
+  userIdIdface: number;
+
   @CreateDateColumn()
   criadoEm: Date;
 
   @UpdateDateColumn()
   atualizadoEm: Date;
-  userIdIdface: any;
+  idfaceUserId: any;
 }

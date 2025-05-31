@@ -9,20 +9,19 @@ import * as path from 'path';
 
 @Injectable()
 export class PessoasService {
+  [x: string]: any;
   idfaceService: any;
   constructor(
     @InjectRepository(Pessoa)
     private readonly repo: Repository<Pessoa>,
   ) { }
 
-  async create(dto: CreatePessoaDto, foto?: Express.Multer.File): Promise<Pessoa> {
-    const novaPessoa = this.repo.create(dto);
+  async create(dto: CreatePessoaDto, foto?: Express.Multer.File, userIdIdface?: number): Promise<Pessoa> {
+    const novaPessoa = this.repo.create({ ...dto, userIdIdface });
 
     if (foto) {
       const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
       const fileName = `${Date.now()}-${foto.originalname}`;
       const filePath = path.join(uploadsDir, fileName);
@@ -33,9 +32,15 @@ export class PessoasService {
 
     return this.repo.save(novaPessoa);
   }
+
   async findAll(): Promise<Pessoa[]> {
     return this.repo.find(); // ajuste conforme seu repositório
   }
+
+  async findById(id: number): Promise<Pessoa | null> {
+    return this.repo.findOne({ where: { id } });
+  }
+
   async delete(id: number): Promise<void> {
     const pessoa = await this.repo.findOne({ where: { id } });
 
