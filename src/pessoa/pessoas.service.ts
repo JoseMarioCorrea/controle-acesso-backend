@@ -6,6 +6,7 @@ import { Pessoa } from './pessoa.entity';
 import { CreatePessoaDto } from './dto/createPessoa.dto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { error } from 'console';
 
 @Injectable()
 export class PessoasService {
@@ -20,17 +21,28 @@ export class PessoasService {
     const novaPessoa = this.repo.create({ ...dto, userIdIdface });
 
     if (foto) {
-      const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads');
+      const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads/fotos');
       if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
       const fileName = `${Date.now()}-${foto.originalname}`;
       const filePath = path.join(uploadsDir, fileName);
       fs.writeFileSync(filePath, foto.buffer);
 
-      novaPessoa.fotoUrl = `uploads/${fileName}`;
+      novaPessoa.fotoUrl = `uploads/fotos/${fileName}`;
     }
+    if (dto.userIdIdface) {
+      try {
+        await this.idfaceService.login();
+        const userIdface = await this.idfaceService.createUserIdface(dto.userIdIdface, novaPessoa.nome);
+        novaPessoa.userIdIdface = userIdface.id;
+        return this.repo.save(novaPessoa);
+      } catch (error) {
+        throw new Error('Erro ao salvar a pessoa: ' + error.message);
+      }
+    } else {
+      throw new Error('Erro ao salvar a pessoa: ' + 'userIdIdface não fornecido');
 
-    return this.repo.save(novaPessoa);
+    }
   }
 
   async findAll(): Promise<Pessoa[]> {
