@@ -1,34 +1,65 @@
 // src/pessoa/dto/createPessoa.dto.ts
-import { Transform } from 'class-transformer';
-import { IsEmail, IsOptional, IsString, IsBoolean } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsNumber,
+  IsString,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePessoaDto {
-  @IsString() nome: string;
-  @IsString() matricula: string;
-  @IsOptional() @IsString() idUsuario?: string;
-  @IsOptional() @IsString() rg?: string;
-  @IsOptional() @IsString() cpf?: string;
-  @IsOptional() @IsEmail() email?: string;
-  @IsOptional() @IsString() telefone?: string;
-  @IsOptional() @IsString() senha?: string;
-  @IsOptional() @IsString() observacoes?: string;
-  @IsOptional()
-  @IsBoolean()
-  @Transform(({ value }) => value === 'true' || value === true)
-  administrador: boolean;
-  @IsOptional()
-  @IsBoolean()
-  @Transform(({ value }) => value === 'true' || value === true)
-  inativo: boolean;
+  @IsNotEmpty()
+  @IsString()
+  nome: string;
 
   @IsOptional()
+  @IsString()
+  matricula?: string;
+
+  // Este campo virá do front para criar o usuário no iDFace
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  userIdIdface?: number;
+
+  @IsOptional()
+  @IsString()
+  rg?: string;
+
+  @IsOptional()
+  @IsString()
+  cpf?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  telefone?: string;
+
+  @IsOptional()
+  @IsString()
+  senha?: string;
+
+  @IsOptional()
+  @IsString()
+  observacoes?: string;
+
+  // Aplicamos @Type(() => Boolean) para converter "true" → true
+  @IsOptional()
+  @Type(() => Boolean)
   @IsBoolean()
-  @Transform(({ value }) => value === 'true' || value === true)
-  listaExcecao: boolean;
+  administrador?: boolean;
 
-  @IsOptional() @IsString() fotoUrl?: string;
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  inativo?: boolean;
 
-  @IsOptional() @IsString() userIdIdface?: number;
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  listaExcecao?: boolean;
 }
-// Note: The `@IsOptional()` decorator is used to indicate that the field is not required.
-// The `@IsString()`, `@IsEmail()`, and `@IsBoolean()` decorators are used to validate the types of the fields.

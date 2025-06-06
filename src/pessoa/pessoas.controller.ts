@@ -1,6 +1,14 @@
 // src/pessoa/pessoas.controller.ts
 import {
-  Controller, Post, Get, Body, Param, Delete, UseInterceptors, UploadedFile, ParseIntPipe
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Delete,
+  UseInterceptors,
+  UploadedFile,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { PessoasService } from './pessoas.service';
 import { CreatePessoaDto } from './dto/createPessoa.dto';
@@ -9,14 +17,15 @@ import { Express } from 'express';
 
 @Controller('pessoas')
 export class PessoasController {
-  constructor(private readonly pessoasService: PessoasService) { }
+  constructor(private readonly pessoasService: PessoasService) {}
 
   @Post()
   @UseInterceptors(FileInterceptor('foto'))
   async create(
     @Body() dto: CreatePessoaDto,
-    @UploadedFile() foto?: Express.Multer.File
+    @UploadedFile() foto?: Express.Multer.File,
   ) {
+    // Retorna a entidade Pessoa completa (incluindo pendenteIdface)
     return this.pessoasService.create(dto, foto);
   }
 

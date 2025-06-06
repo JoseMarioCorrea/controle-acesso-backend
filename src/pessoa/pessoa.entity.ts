@@ -1,28 +1,57 @@
 // src/pessoa/pessoa.entity.ts
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+} from 'typeorm';
 
 @Entity()
 export class Pessoa {
-  @PrimaryGeneratedColumn() id: number;
+  @PrimaryGeneratedColumn()
+  id: number;
 
-  @Column() nome: string;
-  @Column() matricula: string;
+  @Column({ length: 100 })
+  nome: string;
 
-  @Column({ nullable: true }) idUsuario?: string;
-  @Column({ nullable: true }) rg?: string;
-  @Column({ nullable: true }) cpf?: string;
-  @Column({ nullable: true }) email?: string;
-  @Column({ nullable: true }) telefone?: string;
-  @Column({ nullable: true }) senha?: string;
-  @Column({ nullable: true }) observacoes?: string;
+  @Column({ length: 20, nullable: true })
+  matricula: string;
 
-  @Column({ default: false }) administrador: boolean;
-  @Column({ default: false }) inativo: boolean;
-  @Column({ default: false }) listaExcecao: boolean;
+  // Se houver integração com iDFace, armazenamos o ID retornado aqui
+  @Column({ type: 'int', nullable: true })
+  userIdIdface: number | null;
 
-  @Column({ nullable: true }) fotoUrl?: string;
+  @Column({ length: 20, nullable: true })
+  rg: string;
 
-  @Column({ nullable: true }) userIdIdface?: number;
+  @Column({ length: 14, nullable: true })
+  cpf: string;
+
+  @Column({ length: 100, nullable: true })
+  email: string;
+
+  @Column({ length: 20, nullable: true })
+  telefone: string;
+
+  @Column({ length: 100, nullable: true })
+  senha: string;
+
+  @Column({ length: 255, nullable: true })
+  observacoes: string;
+
+  @Column({ default: false })
+  administrador: boolean;
+
+  @Column({ default: false })
+  inativo: boolean;
+
+  @Column({ default: false })
+  listaExcecao: boolean;
+
+  // URL relativa para a foto (se enviada)
+  @Column({ nullable: true })
+  fotoUrl: string;
+
+  // Se a sincronização com iDFace falhar, marcamos como pendente
+  @Column({ default: false })
+  pendenteIdface: boolean;
 }
-// Note: The `@Column()` decorator is used to define the columns in the database table.
-// The `@PrimaryGeneratedColumn()` decorator is used to define the primary key of the table.
