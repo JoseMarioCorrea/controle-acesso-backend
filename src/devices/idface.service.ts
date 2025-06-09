@@ -67,7 +67,7 @@ export class IdfaceService {
     registration: string = '',
     password: string = '',
     salt: string = ''
-  ): Promise<void> {
+  ): Promise<number> {
     await this.ensureSession('admin', 'admin');
     const url = `/create_objects.fcgi?session=${this.session}`;
     const body = {
@@ -76,11 +76,24 @@ export class IdfaceService {
         { name, registration, password, salt }
       ]
     };
-    await firstValueFrom(this.http.post(url, body, {
+
+    const response = await firstValueFrom(this.http.post(url, body, {
       headers: { 'Content-Type': 'application/json' }
     }));
-    this.logger.log(`✔ Criado user "${name}" no iDFace`);
+
+    const created = response.data;
+
+    // Se a resposta for do tipo: { success: true, ids: [XX] }
+    const userId = created?.ids?.[0];
+
+    if (!userId) {
+      throw new BadRequestException('Falha ao obter o user_id criado no iDFace');
+    }
+
+    this.logger.log(`✔ Criado user "${name}" no iDFace | user_id=${userId}`);
+    return userId;
   }
+
 
   async uploadUserPhoto(image: Buffer, userId: number): Promise<any> {
     await this.ensureSession('admin', 'admin');

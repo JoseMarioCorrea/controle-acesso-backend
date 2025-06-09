@@ -18,7 +18,7 @@ export class PessoasService {
     @InjectRepository(Grupo)
     private readonly grupoRepo: Repository<Grupo>,
     private readonly idface: IdfaceService,           // ← injete aqui
-  ) {}
+  ) { }
 
   async create(dto: CreatePessoaDto): Promise<Pessoa> {
     const { grupos, ...rest } = dto;
@@ -33,6 +33,8 @@ export class PessoasService {
 
     // PUSH para iDFace
     try {
+      await this.idface.ensureSession('admin', 'admin');
+
       await this.idface.createUserOnDevice(saved.nome, String(saved.id));
       this.logger.log(`Pessoa ${saved.id} criada no iDFace`);
     } catch (err) {
@@ -64,7 +66,7 @@ export class PessoasService {
 
     // opcional: reenviando configurações de autenticação ao iDFace
     try {
-      await this.idface.setUserAuthentication(id, /* auth_mode: ajuste conforme necessidade */ 0);
+      await this.idface.ensureSession('admin', 'admin');
       this.logger.log(`Pessoa ${id} reconfigurada no iDFace`);
     } catch (err) {
       this.logger.error(`Falha ao reconfigurar Pessoa ${id} no iDFace`, err);
@@ -81,6 +83,8 @@ export class PessoasService {
 
     // DELETE no iDFace
     try {
+      await this.idface.ensureSession('admin', 'admin');
+
       await this.idface.deleteUserFromDevice(id);
       this.logger.log(`Pessoa ${id} removida do iDFace`);
     } catch (err) {

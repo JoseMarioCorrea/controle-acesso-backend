@@ -36,18 +36,20 @@ export class IdfaceController {
 
   // ————— Usuários FCGI —————
   @Post('users')
-  createUser(
+  async createUser(
     @Body('name') name: string,
     @Body('registration') registration?: string,
     @Body('password') password?: string,
     @Body('salt') salt?: string,
   ) {
-    return this.idface.createUserOnDevice(
+    const userId = await this.idface.createUserOnDevice(
       name,
       registration ?? '',
       password ?? '',
       salt ?? ''
     );
+
+    return { userId }; // << aqui retorna o ID para o frontend
   }
 
   @Put('users/:id')
