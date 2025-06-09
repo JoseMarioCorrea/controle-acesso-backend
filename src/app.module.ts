@@ -21,6 +21,9 @@ import { Pessoa } from './pessoa/pessoa.entity';
 import { PessoaModule } from './pessoa/pessoa.module';
 import { LicenseModule } from './license/license.module';
 import { TerminalsModule } from './terminals/terminals.module';
+import { VisitorModule } from './visitors/visitors.module';
+import { Visitante } from './visitors/visitor.entity';
+import { Terminal } from './terminals/terminal.entity';
 dotenv.config();
 
 console.log('MySQL config:', {
@@ -41,7 +44,8 @@ console.log('MySQL config:', {
       database: process.env.DB_DATABASE,
       synchronize: true,
       autoLoadEntities: true,
-      entities: [User, Department, Schedule, Holiday, Pessoa],
+      dropSchema: false,
+      entities: [User, Department, Schedule, Holiday, Pessoa, Visitante, Terminal],
     }),
     UsersModule,
     DepartmentsModule,
@@ -56,6 +60,7 @@ console.log('MySQL config:', {
     PessoaModule,
     LicenseModule,
     TerminalsModule,
+    VisitorModule
   ],
   controllers: [AppController],
   providers: [AppService],

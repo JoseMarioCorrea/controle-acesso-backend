@@ -1,7 +1,7 @@
-// src/terminals/terminal.entity.ts
+// src/idface/entities/terminal.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
-@Entity('terminals')
+@Entity('terminais')
 export class Terminal {
   @PrimaryGeneratedColumn()
   id: number;
@@ -12,12 +12,9 @@ export class Terminal {
   @Column()
   host: string;
 
-  @Column()
+  @Column({ default: 80 })
   port: number;
 
-  @Column({ nullable: true })
+  @Column()
   model: string;
-
-  @Column({ default: 'Offline' })
-  status: string;
 }

@@ -17,16 +17,10 @@ export class User {
   id: number;
 
   @Column()
-  idUsuario: number;
-
-  @Column()
   nome: string;
 
   @Column({ nullable: true })
   fotoUrl: string;
-
-  @Column()
-  senha: string;
 
   @Column({ nullable: true })
   cartaoRfid: string;
@@ -48,4 +42,7 @@ export class User {
 
   @ManyToMany(() => Grupo, (grupo) => grupo.pessoas)
   grupos: Grupo[];
+
+  @Column({ default: true })
+  released: boolean
 }

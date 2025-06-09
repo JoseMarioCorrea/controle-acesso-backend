@@ -50,6 +50,14 @@ export class CreatePessoaDto {
 
   @IsOptional()
   @IsString()
+  confirmarSenha?: string;
+
+  @IsOptional()
+  @IsString()
+  idUsuario?: string;
+  
+  @IsOptional()
+  @IsString()
   observacoes?: string;
 
   // Aplicamos @Type(() => Boolean) para converter "true" → true
@@ -80,5 +88,7 @@ export class CreatePessoaDto {
   @IsBoolean()
   isVisitante?: boolean;
 
-
+  @Type(() => Number)
+  @IsInt()
+  terminalId: number;
 }

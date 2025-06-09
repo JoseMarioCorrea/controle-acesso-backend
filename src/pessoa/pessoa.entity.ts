@@ -69,4 +69,8 @@ export class Pessoa {
 
   @Column ({default: false})
   isVisitante: boolean;
+  registro: any;
+
+  @Column({ type: 'int', nullable: true }) // ✅ CORRETO!
+  terminalId: number;
 }

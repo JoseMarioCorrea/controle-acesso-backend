@@ -4,15 +4,17 @@ import { IsOptional, IsArray, ArrayUnique, IsInt, ArrayNotEmpty } from 'class-va
 import { Type } from 'class-transformer';
 
 export class UpdatePessoaDto extends PartialType(CreatePessoaDto) {
-@IsOptional()
-@IsArray()
-@ArrayUnique()
-@IsInt({ each: true })
-@Type(() => Number) // <- converte strings em números
-readonly grupos?: number[];
+    @IsOptional()
+    @IsArray()
+    @ArrayUnique()
+    @IsInt({ each: true })
+    @Type(() => Number) // <- converte strings em números
+    readonly grupos?: number[];
 
-@IsOptional()
-@IsInt()
-@Type(() => Number)
-userIdIdface?: number;
+    @IsOptional()
+    @IsInt()
+    @Type(() => Number)
+    userIdIdface?: number;
+    terminalId: any;
+
 }

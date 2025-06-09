@@ -1,19 +1,16 @@
 // src/users/dto/create-user.dto.ts
-import { IsString, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNumber } from 'class-validator';
 import { Column } from 'typeorm';
 
 export class CreateUserDto {
   @IsString()
   nome: string;
 
-  @IsString()
-  idUsuario: number;
-
-
   @IsOptional()
   @IsString()
   fotoUrl?: string;
 
+  @IsOptional()
   @IsString()
   senha: string;
 
@@ -28,10 +25,15 @@ export class CreateUserDto {
   @IsOptional()
   departamentoId?: number;
 
-  @Column({ default: false })
-  isVisitante: boolean;
-
   @IsBoolean()
   @IsOptional()
   isMaster?: boolean;
+
+  @IsOptional()
+  @IsNumber()
+  terminalId?: number;
+  
+  @IsBoolean()
+  @IsOptional()
+  released?: boolean;
 }

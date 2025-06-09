@@ -4,10 +4,13 @@ import { HttpModule } from '@nestjs/axios';
 import { IdfaceService } from './idface.service';
 import { IdfaceController } from './idface.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { Terminal } from 'src/terminals/terminal.entity';
+import { TerminalsModule } from 'src/terminals/terminals.module';
 
 @Module({
   imports: [
-    ConfigModule, // para pegar IDFACE_BASE_URL e DEVICE_ID do .env
+    ConfigModule,TerminalsModule, // para pegar IDFACE_BASE_URL e DEVICE_ID do .env
+    Terminal,
     HttpModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

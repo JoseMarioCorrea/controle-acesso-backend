@@ -2,7 +2,8 @@
 import {
   Controller, Post, Get, Body, Param, Delete, Put,
   UseInterceptors, UploadedFile, ParseIntPipe,
-  UsePipes, ValidationPipe
+  UsePipes, ValidationPipe,
+  Query
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PessoasService } from './pessoas.service';
@@ -14,7 +15,7 @@ import { Pessoa } from './pessoa.entity';
 @Controller('pessoas')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class PessoasController {
-  constructor(private readonly pessoasService: PessoasService) {}
+  constructor(private readonly pessoasService: PessoasService) { }
 
   @Post()
   @UseInterceptors(FileInterceptor('foto'))
@@ -47,7 +48,8 @@ export class PessoasController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.pessoasService.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @Query('terminalId', ParseIntPipe) terminalId: number) {
+    return this.pessoasService.remove(id, terminalId);
   }
+
 }
