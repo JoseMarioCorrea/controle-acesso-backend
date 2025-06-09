@@ -1,96 +1,90 @@
 // src/pessoa/pessoas.service.ts
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import type { Repository } from 'typeorm';
 import { Pessoa } from './pessoa.entity';
 import { CreatePessoaDto } from './dto/createPessoa.dto';
-import * as fs from 'fs';
-import * as path from 'path';
-import { IdfaceService } from '../devices/idface.service'; 
+import { UpdatePessoaDto } from './dto/updatePessoa.dto';
+import { Grupo } from '../groups/grupo.entity';
+import { IdfaceService } from '../devices/idface.service';
 
 @Injectable()
 export class PessoasService {
+  private readonly logger = new Logger(PessoasService.name);
+
   constructor(
     @InjectRepository(Pessoa)
     private readonly repo: Repository<Pessoa>,
-    private readonly idfaceService: IdfaceService, // injete aqui seu serviço de iDFace
+    @InjectRepository(Grupo)
+    private readonly grupoRepo: Repository<Grupo>,
+    private readonly idface: IdfaceService,           // ← injete aqui
   ) {}
 
-  /**
-   * Cria nova Pessoa. Tenta primeiro criar no iDFace.
-   * Se falhar, marcamos pendenteIdface=true e persistimos a pessoa de qualquer forma.
-   */
-  async create(
-    dto: CreatePessoaDto,
-    foto?: Express.Multer.File,
-  ): Promise<Pessoa> {
-    // 1) Cria instância da entidade sem userIdIdface ainda
-    const novaPessoa = this.repo.create({ ...dto });
+  async create(dto: CreatePessoaDto): Promise<Pessoa> {
+    const { grupos, ...rest } = dto;
+    const pessoa = this.repo.create(rest);
 
-    // 2) Se houver foto enviada, salva no disco e define novaPessoa.fotoUrl
-    if (foto) {
-      const uploadsDir = path.resolve(__dirname, '..', '..', 'uploads', 'fotos');
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      const fileName = `${Date.now()}-${foto.originalname}`;
-      const filePath = path.join(uploadsDir, fileName);
-      fs.writeFileSync(filePath, foto.buffer);
-      novaPessoa.fotoUrl = `uploads/fotos/${fileName}`;
+    if (grupos?.length) {
+      pessoa.grupos = await this.grupoRepo.findByIds(grupos);
     }
 
-    // 3) Se veio userIdIdface no DTO, tenta criar no iDFace
-    if (dto.userIdIdface) {
-      try {
-        // 3.1) Faz login no iDFace
-        await this.idfaceService.login();
+    const saved = await this.repo.save(pessoa);
+    this.logger.log(`Pessoa criada no BD com id ${saved.id}`);
 
-        // 3.2) Cria o usuário no iDFace, usando o mesmo ID que veio no DTO e o nome da pessoa
-        const resultado = await this.idfaceService.createUserIdface(
-          dto.userIdIdface,
-          novaPessoa.nome,
-        );
-
-        // 3.3) Se obtivermos sucesso, gravamos o ID retornado e marcamos pendenteIdface=false
-        novaPessoa.userIdIdface = resultado.id;
-        novaPessoa.pendenteIdface = false;
-      } catch (error) {
-        // Se algo falhar (rede, permissão, indisponibilidade), marcamos pendente
-        novaPessoa.pendenteIdface = true;
-      }
-    } else {
-      // Se o front não enviou userIdIdface, consideramos como pendente
-      novaPessoa.pendenteIdface = true;
-    }
-
-    // 4) Persiste a Pessoa no banco (mesmo que pendenteIdface=true)
+    // PUSH para iDFace
     try {
-      return await this.repo.save(novaPessoa);
-    } catch (e) {
-      throw new InternalServerErrorException(
-        `Erro ao salvar a pessoa: ${e.message}`,
-      );
+      await this.idface.createUserOnDevice(saved.nome, String(saved.id));
+      this.logger.log(`Pessoa ${saved.id} criada no iDFace`);
+    } catch (err) {
+      this.logger.error(`Falha ao criar Pessoa ${saved.id} no iDFace`, err);
     }
+
+    return saved;
   }
 
   async findAll(): Promise<Pessoa[]> {
-    return this.repo.find();
+    return this.repo.find({ relations: ['grupos'] });
   }
 
-  async findById(id: number): Promise<Pessoa | null> {
-    return this.repo.findOne({ where: { id } });
+  async findById(id: number): Promise<Pessoa> {
+    return this.repo.findOneOrFail({ where: { id }, relations: ['grupos'] });
   }
 
-  async delete(id: number): Promise<void> {
+  async update(id: number, dto: UpdatePessoaDto): Promise<Pessoa> {
+    const { grupos, ...rest } = dto;
+    const pessoa = await this.repo.preload({ id, ...rest });
+    if (!pessoa) throw new NotFoundException('Pessoa não encontrada');
+
+    if (grupos) {
+      pessoa.grupos = await this.grupoRepo.findByIds(grupos);
+    }
+
+    const saved = await this.repo.save(pessoa);
+    this.logger.log(`Pessoa ${id} atualizada no BD`);
+
+    // opcional: reenviando configurações de autenticação ao iDFace
+    try {
+      await this.idface.setUserAuthentication(id, /* auth_mode: ajuste conforme necessidade */ 0);
+      this.logger.log(`Pessoa ${id} reconfigurada no iDFace`);
+    } catch (err) {
+      this.logger.error(`Falha ao reconfigurar Pessoa ${id} no iDFace`, err);
+    }
+
+    return saved;
+  }
+
+  async remove(id: number): Promise<void> {
     const pessoa = await this.repo.findOne({ where: { id } });
-    if (!pessoa) {
-      throw new Error('Pessoa não encontrada');
+    if (!pessoa) throw new NotFoundException('Pessoa não encontrada');
+    await this.repo.remove(pessoa);
+    this.logger.log(`Pessoa ${id} removida do BD`);
+
+    // DELETE no iDFace
+    try {
+      await this.idface.deleteUserFromDevice(id);
+      this.logger.log(`Pessoa ${id} removida do iDFace`);
+    } catch (err) {
+      this.logger.error(`Falha ao remover Pessoa ${id} do iDFace`, err);
     }
-    // Se existir userIdIdface, remove também do iDFace
-    if (pessoa.userIdIdface) {
-      await this.idfaceService.login();
-      await this.idfaceService.deleteUserIdface(pessoa.userIdIdface);
-    }
-    await this.repo.delete(id);
   }
 }

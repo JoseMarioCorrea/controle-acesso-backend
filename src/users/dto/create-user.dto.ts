@@ -5,6 +5,10 @@ export class CreateUserDto {
   @IsString()
   nome: string;
 
+  @IsString()
+  idUsuario: number;
+
+
   @IsOptional()
   @IsString()
   fotoUrl?: string;

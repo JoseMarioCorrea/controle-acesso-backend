@@ -3,7 +3,10 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  JoinTable,
+  ManyToMany,
 } from 'typeorm';
+import { Grupo } from '../groups/grupo.entity';
 
 @Entity()
 export class Pessoa {
@@ -54,4 +57,13 @@ export class Pessoa {
   // Se a sincronização com iDFace falhar, marcamos como pendente
   @Column({ default: false })
   pendenteIdface: boolean;
+
+  @Column({ default: 0 })
+  creditos: number;
+
+  @ManyToMany(() => Grupo, (grupo) => grupo.pessoas, { cascade: true })
+  grupos: Grupo[];
+
+  @Column({ nullable: true })
+  idfaceId: number;    // ID no equipamento iDFace
 }

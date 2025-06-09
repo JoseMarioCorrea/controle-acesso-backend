@@ -6,13 +6,18 @@ import {
   ManyToOne,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToMany,
 } from 'typeorm';
 import { Department } from '../departments/department.entity';
+import { Grupo } from '../groups/grupo.entity';
 
-@Entity()
+@Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
+
+  @Column()
+  idUsuario: number;
 
   @Column()
   nome: string;
@@ -40,4 +45,7 @@ export class User {
 
   @UpdateDateColumn()
   atualizadoEm: Date;
+
+  @ManyToMany(() => Grupo, (grupo) => grupo.pessoas)
+  grupos: Grupo[];
 }

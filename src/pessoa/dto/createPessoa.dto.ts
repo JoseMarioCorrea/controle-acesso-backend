@@ -5,6 +5,10 @@ import {
   IsBoolean,
   IsNumber,
   IsString,
+  IsArray,
+  ArrayUnique,
+  IsInt,
+  ArrayNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -62,4 +66,11 @@ export class CreatePessoaDto {
   @Type(() => Boolean)
   @IsBoolean()
   listaExcecao?: boolean;
+
+ @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  grupos?: number[];
 }

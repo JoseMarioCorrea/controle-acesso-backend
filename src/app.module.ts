@@ -20,6 +20,7 @@ import * as dotenv from 'dotenv';
 import { Pessoa } from './pessoa/pessoa.entity';
 import { PessoaModule } from './pessoa/pessoa.module';
 import { LicenseModule } from './license/license.module';
+import { TerminalsModule } from './terminals/terminals.module';
 dotenv.config();
 
 console.log('MySQL config:', {
@@ -53,7 +54,8 @@ console.log('MySQL config:', {
     AuthModule,
     IdfaceModule,
     PessoaModule,
-    LicenseModule
+    LicenseModule,
+    TerminalsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

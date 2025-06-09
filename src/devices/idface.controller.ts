@@ -1,171 +1,75 @@
-// src/devices/idface.controller.ts
+// src/idface/idface.controller.ts
 import {
-  Controller,
-  Post,
+  Controller, Post, Put, Delete, Body, Param, ParseIntPipe,
+  UsePipes, ValidationPipe,
   Get,
-  Body,
-  UsePipes,
-  ValidationPipe,
+  UploadedFile,
+  UseInterceptors
 } from '@nestjs/common';
 import { IdfaceService } from './idface.service';
-import { SetTimeDto } from './dto/set-time.dto';
-import { SetNetworkDto } from './dto/set-network.dto';
-import { SetVPNInfoDto } from './dto/set-vpn-info.dto';
-import { UploadVpnFileDto } from './dto/upload-vpn-file.dto';
-import { GpioStateDto } from './dto/gpio-state.dto';
-import {
-  SetUserAuthenticationDto,
-  SetUserDeviceDto,
-  SetUserGroupDto,
-  SetUserAccessScheduleDto,
-  DeleteUserDto,
-} from './dto/user-config.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
 
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @Controller('idface')
-@UsePipes(new ValidationPipe({ whitelist: true }))
 export class IdfaceController {
-  constructor(private readonly idfaceService: IdfaceService) {}
+  constructor(private readonly idface: IdfaceService) { }
 
+  // ————— Sessão / Dispositivo ————— (permanece)
   @Post('login')
-  login() {
-    return this.idfaceService.login();
+  login(
+    @Body('login') login: string,
+    @Body('password') password: string
+  ) {
+    return this.idface.login(login, password);
+  }
+  @Post('logout') logout() { return this.idface.logout(); }
+  @Get('session/valid') valid() { return this.idface.validateSession(); }
+  @Post('reboot') reboot() { return this.idface.reboot(); }
+  @Post('factory-reset') factory() { return this.idface.factoryReset(); }
+  @Post('time') time(@Body('datetime') dt: string) {
+    return this.idface.setDateTime(dt);
+  }
+  @Post('network') network(@Body() cfg: any) {
+    return this.idface.configureNetwork(cfg);
+  }
+  // ... vpn, gpio etc ...
+
+  // ————— Usuários FCGI —————
+  @Post('users')
+  createUser(
+    @Body('name') name: string,
+    @Body('registration') registration?: string,
+    @Body('password') password?: string,
+    @Body('salt') salt?: string,
+  ) {
+    return this.idface.createUserOnDevice(
+      name,
+      registration ?? '',
+      password ?? '',
+      salt ?? ''
+    );
   }
 
-  @Post('logout')
-  logout() {
-    return this.idfaceService.logout();
+  @Put('users/:id')
+  updateUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() fields: Record<string, any>
+  ) {
+    return this.idface.updateUserOnDevice(id, fields);
   }
 
-  @Get('session/valid')
-  sessionIsValid() {
-    return this.idfaceService.sessionIsValid();
+  @Delete('users/:id')
+  deleteUser(@Param('id', ParseIntPipe) id: number) {
+    return this.idface.deleteUserFromDevice(id);
   }
 
-  @Post('reboot')
-  reboot() {
-    return this.idfaceService.reboot();
+  @Post('foto')
+  @UseInterceptors(FileInterceptor('foto'))
+  uploadFoto(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('user_id', ParseIntPipe) userId: number
+  ) {
+    return this.idface.uploadUserPhoto(file.buffer, userId);
   }
 
-  @Post('factory-reset')
-  factoryReset() {
-    return this.idfaceService.factoryReset();
-  }
-
-  @Post('time')
-  setTime(@Body() body: SetTimeDto) {
-    return this.idfaceService.setSystemTime(body.datetime);
-  }
-
-  @Post('network')
-  setNetwork(@Body() config: SetNetworkDto) {
-    return this.idfaceService.setNetwork(config);
-  }
-
-  @Post('vpn/config')
-  setVPNInfo(@Body() info: SetVPNInfoDto) {
-    return this.idfaceService.setVPNInfo(info);
-  }
-
-  @Post('vpn/upload-config')
-  sendConfigFile(@Body() body: UploadVpnFileDto) {
-    return this.idfaceService.sendVPNFile(body.file, 'config');
-  }
-
-  @Post('vpn/upload-zip')
-  sendZipFile(@Body() body: UploadVpnFileDto) {
-    return this.idfaceService.sendVPNFile(body.file, 'zip');
-  }
-
-  @Post('gpio')
-  getGpioState(@Body() body: GpioStateDto) {
-    return this.idfaceService.gpioState(body.gpio);
-  }
-
-  // --- Métodos de configuração de usuário ---
-
- /* @Post('user/authentication')
-  setUserAuthentication(@Body() body: SetUserAuthenticationDto) {
-    return this.idfaceService.setUserAuthentication(body);
-  }
-
-  @Post('user/device')
-  setUserDevice(@Body() body: SetUserDeviceDto) {
-    return this.idfaceService.setUserDevice(body);
-  }
-
-  @Post('user/group')
-  setUserGroup(@Body() body: SetUserGroupDto) {
-    return this.idfaceService.setUserGroup(body);
-  }
-
-  @Post('user/schedule')
-  setUserAccessSchedule(@Body() body: SetUserAccessScheduleDto) {
-    return this.idfaceService.setUserAccessSchedule(body);
-  }
-
-  @Post('user/delete')
-  deleteUser(@Body() body: DeleteUserDto) {
-    return this.idfaceService.deleteUser(body);
-  }*/
-
-  // --- Novos endpoints para criação de objetos ---
-
-  @Post('user/create')
-  createUser(@Body() body: { name: string; registration?: string; password?: string; salt?: string }) {
-    return this.idfaceService.createUser(body);
-  }
-
-  @Post('group/create')
-  createGroup(@Body() body: { name: string }) {
-    return this.idfaceService.createGroup(body.name);
-  }
-
-  @Post('user-group/create')
-  createUserGroup(@Body() body: { user_id: number; group_id: number }) {
-    return this.idfaceService.createUserGroup(body.user_id, body.group_id);
-  }
-
-  @Post('user-group/load')
-  loadUserGroup(@Body() body: { user_id: number; group_id: number }) {
-    return this.idfaceService.loadUserGroup(body.user_id, body.group_id);
-  }
-
-  @Post('access-rule/create')
-  createAccessRule(@Body() body: { name: string }) {
-    return this.idfaceService.createAccessRule(body.name);
-  }
-
-  @Post('group-access-rule/create')
-  createGroupAccessRule(@Body() body: { group_id: number; access_rule_id: number }) {
-    return this.idfaceService.createGroupAccessRule(body.group_id, body.access_rule_id);
-  }
-
-  @Post('time-zone/create')
-  createTimeZone(@Body() body: { name: string }) {
-    return this.idfaceService.createTimeZone(body.name);
-  }
-
-  @Post('time-span/create')
-  createTimeSpan(@Body() body: {
-    time_zone_id: number;
-    start: number;
-    end: number;
-    sun: number;
-    mon: number;
-    tue: number;
-    wed: number;
-    thu: number;
-    fri: number;
-    sat: number;
-    hol1: number;
-    hol2: number;
-    hol3: number;
-  }) {
-    return this.idfaceService.createTimeSpan(body);
-  }
-
-  @Post('access-rule-time-zone/create')
-  createAccessRuleTimeZone(@Body() body: { access_rule_id: number; time_zone_id: number }) {
-    return this.idfaceService.createAccessRuleTimeZone(body.access_rule_id, body.time_zone_id);
-  }
 }
