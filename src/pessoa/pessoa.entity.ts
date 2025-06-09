@@ -66,4 +66,7 @@ export class Pessoa {
 
   @Column({ nullable: true })
   idfaceId: number;    // ID no equipamento iDFace
+
+  @Column ({default: false})
+  isVisitante: boolean;
 }

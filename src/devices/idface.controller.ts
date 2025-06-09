@@ -73,5 +73,13 @@ export class IdfaceController {
   ) {
     return this.idface.uploadUserPhoto(file.buffer, userId);
   }
+  // ————— Associação: user_groups —————
+  @Post('users/:id/group/:groupId')
+  assignUserToGroup(
+    @Param('id', ParseIntPipe) userId: number,
+    @Param('groupId', ParseIntPipe) groupId: number
+  ) {
+    return this.idface.assignUserToGroup(userId, groupId);
+  }
 
 }

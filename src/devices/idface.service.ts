@@ -146,8 +146,27 @@ export class IdfaceService {
     }));
     this.logger.log(`✔ Deletado user id=${id} no iDFace`);
   }
+  async assignUserToGroup(userId: number, groupId: number): Promise<void> {
+    await this.ensureSession('admin', 'admin');
+    const url = `/create_objects.fcgi?session=${this.session}`;
+    const body = {
+      object: 'user_groups',
+      values: [
+        { user_id: userId, group_id: groupId }
+      ]
+    };
+
+    const response = await firstValueFrom(this.http.post(url, body, {
+      headers: { 'Content-Type': 'application/json' }
+    }));
+
+    if (!response.data?.ids?.length) {
+      this.logger.error(`❌ Erro ao associar user_id=${userId} ao group_id=${groupId}`, JSON.stringify(response.data));
+      throw new BadRequestException('Falha ao vincular usuário ao grupo no iDFace');
+    }
+    this.logger.log(`✔ user_id=${userId} associado ao group_id=${groupId} | link_id=${response.data.ids[0]}`);
+  }
+
 }
-function dayjs() {
-  throw new Error('Function not implemented.');
-}
+
 

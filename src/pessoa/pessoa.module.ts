@@ -6,6 +6,7 @@ import { Grupo } from '../groups/grupo.entity';
 import { PessoasService } from './pessoas.service';
 import { PessoasController } from './pessoas.controller';
 import { IdfaceModule } from '../devices/idface.module';
+import { VisitorsController } from './visitors.controller';
 
 @Module({
   imports: [
@@ -13,6 +14,6 @@ import { IdfaceModule } from '../devices/idface.module';
     IdfaceModule,                // ← importa o módulo do iDFace
   ],
   providers: [PessoasService],
-  controllers: [PessoasController],
+  controllers: [PessoasController, VisitorsController],
 })
 export class PessoaModule {}

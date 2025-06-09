@@ -11,6 +11,7 @@ import {
   ArrayNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Column } from 'typeorm';
 
 export class CreatePessoaDto {
   @IsNotEmpty()
@@ -67,10 +68,17 @@ export class CreatePessoaDto {
   @IsBoolean()
   listaExcecao?: boolean;
 
- @IsOptional()
+  @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
   @ArrayUnique()
   @IsInt({ each: true })
   grupos?: number[];
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isVisitante?: boolean;
+
+
 }
