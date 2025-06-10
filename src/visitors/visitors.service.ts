@@ -11,34 +11,29 @@ export class VisitorsService {
     @InjectRepository(Visitante)
     private readonly visitorRepo: Repository<Visitante>,
     private readonly idface: IdfaceService,
-  ) {}
+  ) { }
 
   async create(dto: CreateVisitorDto): Promise<Visitante> {
     console.log('DTO recebido:', dto);
 
-    const visitante = this.visitorRepo.create({
-      nome: dto.nome,
-      rg: dto.visitor_rg ?? '',
-      cpf: dto.visitor_cpf ?? '',
-      telefone: dto.phone ?? '',
-      email: dto.email ?? '',
-      observacoes: dto.comments ?? '',
-      validade: dto.shelfLifeDate
-        ? `${dto.shelfLifeDate}T${dto.shelfLifeTime || '23:59'}`
-        : undefined,
-    });
-
+    const { ...rest } = dto;
+    const visitante = this.visitorRepo.create(rest);
     const saved = await this.visitorRepo.save(visitante);
     console.log('Visitante salvo:', saved);
 
     if (!dto.terminalId) throw new Error('terminalId é obrigatório');
 
-    if (!saved.nome?.trim()) {
+    // Certifique-se de que 'saved' é um objeto, não um array
+    if (Array.isArray(saved)) {
+      throw new Error('Erro interno: múltiplos visitantes salvos, esperado apenas um.');
+    }
+
+    if (!dto.nome?.trim()) {
       throw new Error('Nome do visitante é obrigatório para o cadastro no iDFace');
     }
 
     await this.idface.login(dto.terminalId, 'admin', 'admin');
-    await this.idface.createUserOnDevice(dto.terminalId, saved.nome, saved.matricula ?? '', '', '');
+    await this.idface.createUserOnDevice(dto.terminalId, dto.nome, dto.matricula);
 
     return saved;
   }
@@ -57,9 +52,8 @@ export class VisitorsService {
     await this.idface.deleteUserFromDevice(terminalId, id);
   }
 
-  // placeholders que você pode implementar depois
-  findById(id: number) {
-    throw new Error('Method not implemented.');
+  async findById(id: number): Promise<Visitante> {
+    return this.visitorRepo.findOneOrFail({ where: { id } });
   }
 
   update(
@@ -70,8 +64,8 @@ export class VisitorsService {
       userIdIdface?: number;
       nome?: string;
       matricula?: string;
-      rg?: string;
-      cpf?: string;
+      visitor_rg?: string;
+      visitor_cpf?: string;
       email?: string;
       telefone?: string;
       senha?: string;

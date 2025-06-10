@@ -31,6 +31,7 @@ export class UsersService {
     return this.userRepo.save(user);
   }
 
+
   async findOne(id: number): Promise<User> {
     const user = await this.userRepo.findOne({
       where: { id },

@@ -1,9 +1,38 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber } from "class-validator";
+import { Type } from 'class-transformer';
+import {
+  IsOptional,
+  IsString,
+  IsEmail,
+  IsInt,
+} from 'class-validator';
 
 export class CreateVisitorDto {
-  @IsNotEmpty()
   @IsString()
   nome: string;
+
+  @IsOptional()
+  @IsString()
+  visitor_rg?: string;
+
+  @IsOptional()
+  @IsString()
+  visitor_cpf?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  observacoes?: string;
+
+  @IsOptional()
+  @IsString()
+  validade?: string;
 
   @IsOptional()
   @IsString()
@@ -23,24 +52,26 @@ export class CreateVisitorDto {
 
   @IsOptional()
   @IsString()
-  visitor_rg?: string;
+  matricula?: string;
 
   @IsOptional()
   @IsString()
-  visitor_cpf?: string;
+  comments: string;
 
   @IsOptional()
   @IsString()
-  phone?: string;
+  rg?: string;
 
   @IsOptional()
   @IsString()
-  email?: string;
+  cpf?: string;
 
   @IsOptional()
   @IsString()
-  comments?: string;
+  telefone?: string;
+
   @IsOptional()
-  @IsNumber()
-  terminalId?: number;
+  @Type(() => Number)
+  @IsInt()
+  terminalId: number;
 }

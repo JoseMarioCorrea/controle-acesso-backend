@@ -48,8 +48,9 @@ export class PessoasController {
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @Query('terminalId', ParseIntPipe) terminalId: number) {
+  remove(@Param('id', ParseIntPipe) id: number, @Param('terminalId', ParseIntPipe) terminalId: number) {
     return this.pessoasService.remove(id, terminalId);
   }
 
 }
+

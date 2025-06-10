@@ -31,9 +31,9 @@ export class VisitorsController {
   @UseInterceptors(FileInterceptor('foto'))
   create(
     @UploadedFile() foto: Express.Multer.File,
-    @Body() body: CreateVisitorDto
+    @Body() dto: CreateVisitorDto
   ) {
-    return this.visitorsService.create({ ...body });
+    return this.visitorsService.create(dto);
   }
 
   @Get()

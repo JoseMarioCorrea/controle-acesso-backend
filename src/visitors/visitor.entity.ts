@@ -5,17 +5,23 @@ export class Visitante {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
+  @Column({ length: 100 })
   nome: string;
 
   @Column({ nullable: true })
+  visitor_rg: string;
+
+  @Column({ nullable: true })
+  visitor_cpf: string;
+
+    @Column({ nullable: true })
   rg: string;
 
   @Column({ nullable: true })
   cpf: string;
 
   @Column({ nullable: true })
-  telefone: string;
+  phone: string;
 
   @Column({ nullable: true })
   email: string;
@@ -40,4 +46,7 @@ export class Visitante {
 
   @Column({ nullable: true })
   matricula: string;
+
+  @Column({ type: 'int', nullable: true }) // ✅ CORRETO!
+  terminalId: number;
 }

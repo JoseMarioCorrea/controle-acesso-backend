@@ -55,20 +55,62 @@ export class IdfaceService {
     }
   }
 
-  async releaseUserOnDevice(terminalId: number, userId: number, name: string): Promise<void> {
+  async releaseUserOnDevice(
+    terminalId: number,
+    userId: number,
+    name: string,
+    defaultGroupId = 1 // ID do grupo padrão
+  ): Promise<void> {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
-    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
+
+    // 1. Criar regra de acesso
+    const ruleUrl = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const ruleBody = {
       object: 'access_rules',
-      values: [{ name: name, type: 1, priority: 1 }],
+      values: [{ name: name, type: 1, priority: 0 }],
     };
-    const response = await http.post(url, body);
-    if (response.data?.ids?.length !== 1) {
-      throw new Error('Erro ao liberar usuário no dispositivo');
+    const ruleResp = await http.post(ruleUrl, ruleBody);
+    const accessRuleId = ruleResp.data?.ids?.[0];
+
+    if (!accessRuleId) {
+      throw new Error('Erro ao criar regra de acesso');
     }
+
+    // 2. Associar usuário à regra
+    const userAccessBody = {
+      object: 'user_access_rules',
+      values: [{ user_id: userId, access_rule_id: accessRuleId }],
+    };
+    const userAccessResp = await http.post(ruleUrl, userAccessBody);
+    if (!userAccessResp.data?.ids?.length) {
+      throw new Error('Erro ao associar usuário à regra de acesso');
+    }
+
+    // 3. Associar usuário ao grupo (departamento)
+    const userGroupBody = {
+      object: 'user_groups',
+      values: [{ user_id: userId, group_id: defaultGroupId }],
+    };
+    const userGroupResp = await http.post(ruleUrl, userGroupBody);
+    if (!userGroupResp.data?.ids?.length) {
+      throw new Error('Erro ao associar usuário ao grupo padrão');
+    }
+
+    // 4. Forçar recarga opcional
+    await http.post(`/load_objects.fcgi?session=${this.sessions[terminalId]}`, {
+      object: 'user_access_rules',
+    });
+    await http.post(`/load_objects.fcgi?session=${this.sessions[terminalId]}`, {
+      object: 'user_groups',
+    });
+    await http.post(`/load_objects.fcgi?session=${this.sessions[terminalId]}`, {
+      object: 'access_rules',
+    });
+
     this.logger.log(`✔ Usuário ${userId} liberado no terminal ${terminalId}`);
   }
+
 
 
   async reboot(terminalId: number) {
@@ -109,11 +151,6 @@ export class IdfaceService {
     this.logger.log(`✔ Usuário criado: id=${userId} no terminal ${terminalId}`);
 
     // Confirma se o usuário foi salvo corretamente antes de seguir
-    const confirmado = await this.confirmUserExists(terminalId, userId);
-    if (!confirmado) {
-      throw new BadRequestException(`Usuário ${userId} não confirmado no terminal ${terminalId}`);
-    }
-
     // Liberação de acesso
     await this.releaseUserOnDevice(terminalId, userId, name);
 
