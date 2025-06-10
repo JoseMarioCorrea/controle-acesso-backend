@@ -47,10 +47,12 @@ export class PessoasController {
     return this.pessoasService.update(id, dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number, @Param('terminalId', ParseIntPipe) terminalId: number) {
+  @Delete(':id/:terminalId')
+  remove(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('terminalId', ParseIntPipe) terminalId: number
+  ) {
     return this.pessoasService.remove(id, terminalId);
   }
-
 }
 
