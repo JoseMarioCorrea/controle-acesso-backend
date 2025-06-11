@@ -24,6 +24,8 @@ import { TerminalsModule } from './terminals/terminals.module';
 import { VisitorModule } from './visitors/visitors.module';
 import { Visitante } from './visitors/visitor.entity';
 import { Terminal } from './terminals/terminal.entity';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import './polyfill';
 dotenv.config();
 
 console.log('MySQL config:', {
@@ -35,17 +37,32 @@ console.log('MySQL config:', {
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 3306,
-      username: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
-      synchronize: true,
-      autoLoadEntities: true,
-      dropSchema: false,
-      entities: [User, Department, Schedule, Holiday, Pessoa, Visitante, Terminal],
+    // 1) ConfigModule carrega suas configs (e variáveis de ambiente se houver um .env)
+    ConfigModule.forRoot({
+      isGlobal: true,
+      // se você quiser ler também de um .env, remova ou ajuste ignoreEnvFile
+      ignoreEnvFile: true,
+      load: [() => ({
+        DB_TYPE: 'sqlite',
+        DB_DATABASE: './data/controle_acesso.sqlite',
+        IDFACE_BASE_URL: 'http://192.168.18.55',
+      })],
+    }),
+    // 2) TypeORM usando forRootAsync para injetar o ConfigService
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: config.get<'sqlite'>('DB_TYPE'),
+        database: config.get<string>('DB_DATABASE'),
+        entities: [
+          __dirname + '/**/*.entity{.ts,.js}',
+        ],
+        synchronize: true,
+        autoLoadEntities: true,
+        dropSchema: true,     // cuidado: apaga o banco a cada start
+        // logging: true,
+      }),
     }),
     UsersModule,
     DepartmentsModule,
@@ -65,5 +82,5 @@ console.log('MySQL config:', {
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
 
