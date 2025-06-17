@@ -112,6 +112,14 @@ export class IdfaceController {
     return { exists };
   }
 
+  @Post('user_test_image/:terminalId')
+  @UseInterceptors(FileInterceptor('foto'))
+  testUserImage(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @UploadedFile() file: Express.Multer.File
+  ) {
+    return this.idface.testUserImage(terminalId, file.buffer);
+  }
 
   @Post('foto/:terminalId')
   @UseInterceptors(FileInterceptor('foto'))
@@ -131,4 +139,12 @@ export class IdfaceController {
   ) {
     return this.idface.assignUserToGroup(terminalId, userId, groupId);
   }
+
+  @Get('users/:terminalId/last-id')
+  getLastUserId(
+    @Param('terminalId', ParseIntPipe) terminalId: number
+  ) {
+    return this.idface.getLastUserId(terminalId).then(id => ({ lastUserId: id }));
+  }
+
 }

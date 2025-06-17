@@ -234,4 +234,32 @@ export class IdfaceService {
     }
     this.logger.log(`✔ user_id=${userId} associado ao group_id=${groupId} no terminal ${terminalId}`);
   }
+
+  async testUserImage(terminalId: number, image: Buffer): Promise<any> {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+
+    const session = this.sessions[terminalId];
+    const url = `/user_test_image.fcgi?session=${session}`;
+
+    const response = await http.post(url, image, {
+      headers: { 'Content-Type': 'application/octet-stream' },
+    });
+
+    return response.data;
+  }
+  async getLastUserId(terminalId: number): Promise<number> {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
+
+    const body = {
+      object: 'users'
+    };
+
+    const response = await http.post(url, body);
+
+    return response.data
+  }
+
 }

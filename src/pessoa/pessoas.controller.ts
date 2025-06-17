@@ -18,7 +18,6 @@ export class PessoasController {
   constructor(private readonly pessoasService: PessoasService) { }
 
   @Post()
-  @UseInterceptors(FileInterceptor('foto'))
   create(
     @Body() dto: CreatePessoaDto,
     @UploadedFile() foto?: Express.Multer.File,

@@ -24,7 +24,7 @@ export class PessoasService {
   async create(dto: CreatePessoaDto): Promise<Pessoa> {
     const { grupos, ...rest } = dto;
     const pessoa = this.repo.create(rest);
-
+    let idfaceId;
     if (grupos?.length) {
       pessoa.grupos = await this.grupoRepo.findByIds(grupos);
     }
@@ -42,7 +42,7 @@ export class PessoasService {
         throw new BadRequestException('terminalId é obrigatório para criar usuário no iDFace');
       }
       if (!saved.inativo) {
-        await this.idface.createUserOnDevice(terminalId, nome, registro);
+       idfaceId = await this.idface.createUserOnDevice(terminalId, nome, registro);
         this.logger.log(`Pessoa ${saved.id} liberada no iDFace`);
       } else {
         this.logger.warn(`Pessoa ${saved.id} está inativa e não será liberada no iDFace`);
@@ -53,7 +53,7 @@ export class PessoasService {
       this.logger.error(`Falha ao criar Pessoa ${saved.id} no iDFace`, err);
     }
 
-    return saved;
+    return idfaceId;
   }
 
   async findAll(): Promise<Pessoa[]> {
