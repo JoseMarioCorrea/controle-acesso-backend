@@ -6,6 +6,7 @@ import { User } from '../users/user.entity';
 import { Visitante } from '../visitors/visitor.entity';
 import { DepartmentsService } from './departments.service';
 import { DepartmentsController } from './departments.controller';
+import { Grupo } from 'src/groups/grupo.entity';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { DepartmentsController } from './departments.controller';
       Department,    // já existia
       User,          // adicione este
       Visitante,     // e este
+      Grupo
     ]),
   ],
   controllers: [DepartmentsController],

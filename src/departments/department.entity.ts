@@ -6,10 +6,12 @@ import {
   ManyToOne,
   ManyToMany,
   JoinTable,
+  OneToMany,
 } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Visitante } from '../visitors/visitor.entity';
 import { Terminal } from '../terminals/terminal.entity';
+import { Grupo } from 'src/groups/grupo.entity';
 
 @Entity()
 export class Department {
@@ -35,4 +37,7 @@ export class Department {
   @ManyToMany(() => Visitante, (v) => v.departmento, { cascade: true })
   @JoinTable({ name: 'department_visitors' })
   visitantes: Visitante[];
+
+  @OneToMany(() => Grupo, (grupo) => grupo.department)
+  grupos: Grupo[];
 }

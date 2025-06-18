@@ -60,7 +60,7 @@ console.log('MySQL config:', {
         ],
         synchronize: true,
         autoLoadEntities: true,
-        dropSchema: true,     // cuidado: apaga o banco a cada start
+        dropSchema: false,     // cuidado: apaga o banco a cada start
         // logging: true,
       }),
     }),
