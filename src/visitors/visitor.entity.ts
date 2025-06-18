@@ -1,4 +1,5 @@
-import { Entity, PrimaryGeneratedColumn, Column } from "typeorm";
+import { Department } from "src/departments/department.entity";
+import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from "typeorm";
 
 @Entity('visitantes')
 export class Visitante {
@@ -14,7 +15,7 @@ export class Visitante {
   @Column({ nullable: true })
   visitor_cpf: string;
 
-    @Column({ nullable: true })
+  @Column({ nullable: true })
   rg: string;
 
   @Column({ nullable: true })
@@ -49,4 +50,6 @@ export class Visitante {
 
   @Column({ type: 'int', nullable: true }) // ✅ CORRETO!
   terminalId: number;
+  @ManyToMany(() => Department, (d) => d.visitantes)
+  departmento: Department[];
 }

@@ -55,6 +55,23 @@ export class IdfaceService {
     }
   }
 
+  async modifyObjects(
+    terminalId: number,
+    payload: {
+      object: string;
+      values: Record<string, any>;
+      where: Record<string, any>;
+    },
+  ) {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    await http.post(
+      `/modify_objects.fcgi?session=${this.sessions[terminalId]}`,
+      payload,
+      { headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
   async releaseUserOnDevice(
     terminalId: number,
     userId: number,

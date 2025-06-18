@@ -1,5 +1,6 @@
 // src/idface/entities/terminal.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { Department } from '../departments/department.entity';
 
 @Entity('terminais')
 export class Terminal {
@@ -17,4 +18,8 @@ export class Terminal {
 
   @Column()
   model: string;
+
+  // ligação inversa: um terminal para muitos departamentos
+  @OneToMany(() => Department, (dept) => dept.terminal)
+  departments: Department[];
 }

@@ -7,10 +7,11 @@ import { Visitante } from './visitor.entity';
 import { Pessoa } from '../pessoa/pessoa.entity';
 import { PessoaModule } from '../pessoa/pessoa.module';
 import { IdfaceModule } from 'src/devices/idface.module';
+import { Department } from 'src/departments/department.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Visitante, Pessoa]),
+    TypeOrmModule.forFeature([Visitante, Pessoa, Department]),
     IdfaceModule, // caso use o service de pessoas
   ],
   controllers: [VisitorsController],

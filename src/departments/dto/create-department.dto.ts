@@ -1,7 +1,18 @@
 // src/departments/dto/create-department.dto.ts
-import { IsString } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsArray } from 'class-validator';
 
 export class CreateDepartmentDto {
-  @IsString()
+  @IsNotEmpty() 
   nome: string;
+
+  @IsNumber()
+  terminalId: number;
+
+  @IsOptional()
+  @IsArray()
+  userIds?: number[];
+
+  @IsOptional()
+  @IsArray()
+  visitorIds?: number[];
 }

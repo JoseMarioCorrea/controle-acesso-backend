@@ -4,6 +4,7 @@ import { IdfaceService } from "src/devices/idface.service";
 import { Repository } from "typeorm";
 import { Visitante } from "./visitor.entity";
 import { CreateVisitorDto } from "./dto/create-visitors.dto";
+import { UpdateVisitorDto } from "./dto/update-visitor.dto";
 
 @Injectable()
 export class VisitorsService {
@@ -56,25 +57,27 @@ export class VisitorsService {
     return this.visitorRepo.findOneOrFail({ where: { id } });
   }
 
-  update(
-    id: number,
-    payload: {
-      isVisitante: boolean;
-      grupos?: number[];
-      userIdIdface?: number;
-      nome?: string;
-      matricula?: string;
-      visitor_rg?: string;
-      visitor_cpf?: string;
-      email?: string;
-      telefone?: string;
-      senha?: string;
-      observacoes?: string;
-      administrador?: boolean;
-      inativo?: boolean;
-      listaExcecao?: boolean;
-    },
-  ): Visitante | PromiseLike<Visitante> {
-    throw new Error('Method not implemented.');
+  async update(id: number, dto: UpdateVisitorDto): Promise<Visitante> {
+    const visitante = await this.visitorRepo.findOne({ where: { id } });
+    if (!visitante) {
+      throw new NotFoundException('Visitante não encontrado');
+    }
+
+    const { terminalId, shelfLifeDate, shelfLifeTime, ...rest } = dto;
+    Object.assign(visitante, rest as Partial<Visitante>);
+    const updated = await this.visitorRepo.save(visitante);
+
+    if (terminalId) {
+      await this.idface.login(terminalId, 'admin', 'admin');
+      // Ajusta validade no iDFace
+      const endTimestamp = Math.floor(new Date(`${shelfLifeDate}T${shelfLifeTime}`).getTime() / 1000);
+      await this.idface.modifyObjects(terminalId, {
+        object: 'users',
+        values: { begin_time: 0, end_time: endTimestamp },
+        where: { users: { id: updated.id } },
+      });
+    }
+
+    return updated;
   }
 }
