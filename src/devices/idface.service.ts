@@ -1,114 +1,200 @@
-
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
-import axios, { AxiosInstance } from 'axios';
+// src/idface/idface.service.ts
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { delay, firstValueFrom } from 'rxjs';
+import { TerminalsService } from 'src/terminals/terminals.service';
 
 @Injectable()
 export class IdfaceService {
-  private client: AxiosInstance;
-  private session: string | null = null;
+  [x: string]: any;
+  private readonly logger = new Logger(IdfaceService.name);
+  private sessions: Record<number, string> = {};
 
-  constructor() {
-    this.client = axios.create({
-      baseURL: process.env.IDFACE_BASE_URL || 'http://192.168.0.100',
-      headers: { 'Content-Type': 'application/json' },
-      auth: {
-        username: process.env.IDFACE_USER || 'admin',
-        password: process.env.IDFACE_PASS || 'admin',
-      },
-    });
+  constructor(
+    private readonly http: HttpService,
+    private readonly terminalService: TerminalsService
+  ) { }
+
+  private async getHttp(terminalId: number) {
+    const terminal = await this.terminalService.findById(terminalId);
+    const baseURL = `http://${terminal.host}:${terminal.port}`;
+    return this.http.axiosRef.create({ baseURL });
   }
 
-  async login(): Promise<string> {
-    const res = await this.client.post('/login.fcgi');
-    if (res.data?.session) {
-      this.session = res.data.session;
-      return this.session?? 'error';
+  private async ensureSession(terminalId: number, login = 'admin', password = 'admin') {
+    const http = await this.getHttp(terminalId);
+    const resp = await http.post('/login.fcgi', { login, password });
+    this.sessions[terminalId] = resp.data.session;
+    this.logger.log(`✔ Login terminal ${terminalId}: session=${resp.data.session}`);
+  }
+
+  async login(terminalId: number, login: string, password: string) {
+    await this.ensureSession(terminalId, login, password);
+    return { session: this.sessions[terminalId] };
+  }
+
+  async logout(terminalId: number) {
+    const http = await this.getHttp(terminalId);
+    await http.post(`/logout?session=${this.sessions[terminalId]}`, {});
+    this.logger.log(`✔ Logout terminal ${terminalId}`);
+    delete this.sessions[terminalId];
+  }
+
+  async validateSession(terminalId: number) {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const resp = await http.get(`/session/valid?session=${this.sessions[terminalId]}`);
+    return { valid: resp.data.valid };
+  }
+
+  async liberarAcesso(terminalId: number, userId: string): Promise<void> {
+    const client = this.getClientForTerminal(terminalId);
+    const res = await client.post(`/liberar_acesso.cgi`, { user_id: userId });
+    if (!res.data.success) {
+      throw new Error(`Falha ao liberar acesso para usuário ${userId}`);
     }
-    throw new HttpException('Falha ao autenticar com o iDFace', HttpStatus.UNAUTHORIZED);
   }
 
-  async logout(): Promise<void> {
-    if (!this.session) await this.login();
-    await this.client.post(`/logout.fcgi?session=${this.session}`);
-    this.session = null;
+  async releaseUserOnDevice(terminalId: number, userId: number, name: string): Promise<void> {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'access_rules',
+      values: [{ name: name, type: 1, priority: 1 }],
+    };
+    const response = await http.post(url, body);
+    if (response.data?.ids?.length !== 1) {
+      throw new Error('Erro ao liberar usuário no dispositivo');
+    }
+    this.logger.log(`✔ Usuário ${userId} liberado no terminal ${terminalId}`);
   }
 
-  async sessionIsValid(): Promise<boolean> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/session_is_valid.fcgi', {
-      session: this.session,
+
+  async reboot(terminalId: number) {
+    const http = await this.getHttp(terminalId);
+    await http.post(`/reboot?session=${this.sessions[terminalId]}`, {});
+  }
+
+  async factoryReset(terminalId: number) {
+    const http = await this.getHttp(terminalId);
+    await http.post(`/factory-reset?session=${this.sessions[terminalId]}`, {});
+  }
+
+  async setDateTime(terminalId: number, datetime: string) {
+    const http = await this.getHttp(terminalId);
+    await http.post(`/time?session=${this.sessions[terminalId]}`, { datetime });
+  }
+
+  async configureNetwork(terminalId: number, cfg: any) {
+    const http = await this.getHttp(terminalId);
+    await http.post(`/network?session=${this.sessions[terminalId]}`, cfg);
+  }
+
+  async createUserOnDevice(terminalId: number, name: string, registration = '', password = '', salt = ''): Promise<number> {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'users',
+      values: [{ name, registration, password, salt }],
+    };
+    const response = await http.post(url, body);
+    const userId = response.data?.ids?.[0];
+
+    if (!userId || typeof userId !== 'number') {
+      throw new BadRequestException('Erro ao criar usuário no iDFace');
+    }
+
+    this.logger.log(`✔ Usuário criado: id=${userId} no terminal ${terminalId}`);
+
+    // Confirma se o usuário foi salvo corretamente antes de seguir
+    const confirmado = await this.confirmUserExists(terminalId, userId);
+    if (!confirmado) {
+      throw new BadRequestException(`Usuário ${userId} não confirmado no terminal ${terminalId}`);
+    }
+
+    // Liberação de acesso
+    await this.releaseUserOnDevice(terminalId, userId, name);
+
+    return userId;
+  }
+  async confirmUserExists(terminalId: number, userId: number): Promise<boolean> {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'users',
+      where: { users: { id: userId } }
+    };
+    const response = await http.post(url, body);
+    return response.data?.objects?.length > 0;
+  }
+
+  async loadUserById(terminalId: number, userId: number) {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'users',
+      where: { users: { id: userId } },
+    };
+    const response = await http.post(url, body);
+    return response.data.objects?.[0] ?? null;
+  }
+
+  async uploadUserPhoto(terminalId: number, image: Buffer, userId: number): Promise<any> {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const url = `/user_set_image.fcgi?user_id=${userId}&timestamp=${timestamp}&match=0&session=${this.sessions[terminalId]}`;
+    const response = await http.post(url, image, {
+      headers: { 'Content-Type': 'application/octet-stream' },
     });
-    return res.data?.success === true;
+    if (!response.data?.success) {
+      throw new BadRequestException({ message: 'Erro ao cadastrar foto' });
+    }
+    this.logger.log(`✔ Foto cadastrada para user_id=${userId} no terminal ${terminalId}`);
+    return response.data;
   }
 
-  async reboot(): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/reboot.fcgi', {
-      session: this.session,
-    });
-    return res.data;
+  async updateUserOnDevice(terminalId: number, id: number, fields: Record<string, any>) {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/modify_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'users',
+      values: fields,
+      where: { users: { id } },
+    };
+    await http.post(url, body);
+    this.logger.log(`✔ Atualizado user id=${id} no terminal ${terminalId}`);
   }
 
-  async factoryReset(): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/reset_to_factory_default.fcgi', {
-      session: this.session,
-    });
-    return res.data;
+  async deleteUserFromDevice(terminalId: number, id: number) {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/destroy_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'users',
+      where: { users: { id } },
+    };
+    await http.post(url, body);
+    this.logger.log(`✔ Deletado user id=${id} no terminal ${terminalId}`);
   }
 
-  async setSystemTime(date: string): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/set_system_time.fcgi', {
-      session: this.session,
-      datetime: date,
-    });
-    return res.data;
-  }
-
-  async setNetwork(config: {
-    ip: string;
-    mask: string;
-    gateway: string;
-    dns: string;
-    hostname: string;
-  }): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/set_system_network.fcgi', {
-      session: this.session,
-      ...config,
-    });
-    return res.data;
-  }
-
-  async setVPNInfo(info: {
-    server: string;
-    port: number;
-    proto: string;
-    username: string;
-    password: string;
-  }): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/set_vpn_information.fcgi', {
-      session: this.session,
-      ...info,
-    });
-    return res.data;
-  }
-
-  async sendVPNFile(fileBase64: string, fileType: 'zip' | 'config'): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post(`/set_vpn_file.fcgi?session=${this.session}&file_type=${fileType}`, {
-      file: fileBase64,
-    });
-    return res.data;
-  }
-
-  async gpioState(): Promise<any> {
-    if (!this.session) await this.login();
-    const res = await this.client.post('/gpio_state.fcgi', {
-      session: this.session,
-    });
-    return res.data;
+  async assignUserToGroup(terminalId: number, userId: number, groupId: number) {
+    await this.ensureSession(terminalId);
+    const http = await this.getHttp(terminalId);
+    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
+    const body = {
+      object: 'user_groups',
+      values: [{ user_id: userId, group_id: groupId }],
+    };
+    const response = await http.post(url, body);
+    if (!response.data?.ids?.length) {
+      throw new BadRequestException('Falha ao vincular usuário ao grupo');
+    }
+    this.logger.log(`✔ user_id=${userId} associado ao group_id=${groupId} no terminal ${terminalId}`);
   }
 }

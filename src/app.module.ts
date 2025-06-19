@@ -17,6 +17,13 @@ import { Schedule } from './schedules/schedule.entity';
 import { Holiday } from './holidays/holiday.entity';
 import { IdfaceModule } from './devices/idface.module';
 import * as dotenv from 'dotenv';
+import { Pessoa } from './pessoa/pessoa.entity';
+import { PessoaModule } from './pessoa/pessoa.module';
+import { LicenseModule } from './license/license.module';
+import { TerminalsModule } from './terminals/terminals.module';
+import { VisitorModule } from './visitors/visitors.module';
+import { Visitante } from './visitors/visitor.entity';
+import { Terminal } from './terminals/terminal.entity';
 dotenv.config();
 
 console.log('MySQL config:', {
@@ -37,14 +44,26 @@ console.log('MySQL config:', {
       database: process.env.DB_DATABASE,
       synchronize: true,
       autoLoadEntities: true,
-      entities: [User, Department, Schedule, Holiday, IdfaceModule], 
+      dropSchema: false,
+      entities: [User, Department, Schedule, Holiday, Pessoa, Visitante, Terminal],
     }),
-    UsersModule, DepartmentsModule, SchedulesModule,
-    HolidaysModule, AlarmsModule,
-    ReportsModule, SystemModule,
-    NetworkModule, AuthModule
+    UsersModule,
+    DepartmentsModule,
+    SchedulesModule,
+    HolidaysModule,
+    AlarmsModule,
+    ReportsModule,
+    SystemModule,
+    NetworkModule,
+    AuthModule,
+    IdfaceModule,
+    PessoaModule,
+    LicenseModule,
+    TerminalsModule,
+    VisitorModule
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
+

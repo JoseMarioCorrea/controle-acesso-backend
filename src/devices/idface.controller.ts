@@ -1,84 +1,134 @@
+// src/devices/idface.controller.ts
 import {
-  Controller,
-  Post,
+  Controller, Post, Put, Delete, Body, Param, ParseIntPipe,
+  UsePipes, ValidationPipe,
   Get,
-  Body,
-  Query,
-  BadRequestException,
+  UploadedFile,
+  UseInterceptors
 } from '@nestjs/common';
 import { IdfaceService } from './idface.service';
+import { FileInterceptor } from '@nestjs/platform-express';
 
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @Controller('idface')
 export class IdfaceController {
-  constructor(private readonly idfaceService: IdfaceService) {}
+  constructor(private readonly idface: IdfaceService) { }
 
-  @Post('login')
-  login() {
-    return this.idfaceService.login();
+  @Post('login/:terminalId')
+  login(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Body('login') login: string,
+    @Body('password') password: string
+  ) {
+    return this.idface.login(terminalId, login, password);
   }
 
-  @Post('logout')
-  logout() {
-    return this.idfaceService.logout();
+  @Post('logout/:terminalId')
+  logout(@Param('terminalId', ParseIntPipe) terminalId: number) {
+    return this.idface.logout(terminalId);
   }
 
-  @Get('session/valid')
-  sessionIsValid() {
-    return this.idfaceService.sessionIsValid();
+  @Get('session/valid/:terminalId')
+  valid(@Param('terminalId', ParseIntPipe) terminalId: number) {
+    return this.idface.validateSession(terminalId);
   }
 
-  @Post('reboot')
-  reboot() {
-    return this.idfaceService.reboot();
+  @Post('reboot/:terminalId')
+  reboot(@Param('terminalId', ParseIntPipe) terminalId: number) {
+    return this.idface.reboot(terminalId);
   }
 
-  @Post('factory-reset')
-  factoryReset() {
-    return this.idfaceService.factoryReset();
+  @Post('factory-reset/:terminalId')
+  factory(@Param('terminalId', ParseIntPipe) terminalId: number) {
+    return this.idface.factoryReset(terminalId);
   }
 
-  @Post('time')
-  setTime(@Body('datetime') datetime: string) {
-    if (!datetime) throw new BadRequestException('datetime é obrigatório');
-    return this.idfaceService.setSystemTime(datetime);
+  @Post('time/:terminalId')
+  time(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Body('datetime') dt: string
+  ) {
+    return this.idface.setDateTime(terminalId, dt);
   }
 
-  @Post('network')
-  setNetwork(@Body() config: {
-    ip: string;
-    mask: string;
-    gateway: string;
-    dns: string;
-    hostname: string;
-  }) {
-    return this.idfaceService.setNetwork(config);
+  @Post('network/:terminalId')
+  network(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Body() cfg: any
+  ) {
+    return this.idface.configureNetwork(terminalId, cfg);
   }
 
-  @Post('vpn/config')
-  setVPNInfo(@Body() info: {
-    server: string;
-    port: number;
-    proto: string;
-    username: string;
-    password: string;
-  }) {
-    return this.idfaceService.setVPNInfo(info);
+  @Post('users/:terminalId')
+  async createUser(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Body('name') name: string,
+    @Body('registration') registration?: string,
+    @Body('password') password?: string,
+    @Body('salt') salt?: string,
+  ) {
+    const userId = await this.idface.createUserOnDevice(
+      terminalId,
+      name,
+      registration ?? '',
+      password ?? '',
+      salt ?? ''
+    );
+    return { userId };
   }
 
-  @Post('vpn/upload-config')
-  sendConfigFile(@Body('file') file: string) {
-    if (!file) throw new BadRequestException('Arquivo em base64 é obrigatório');
-    return this.idfaceService.sendVPNFile(file, 'config');
+  @Put('users/:terminalId/:id')
+  updateUser(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() fields: Record<string, any>
+  ) {
+    return this.idface.updateUserOnDevice(terminalId, id, fields);
   }
 
-  @Post('vpn/upload-zip')
-  sendZipFile(@Body('file') file: string) {
-    if (!file) throw new BadRequestException('Arquivo em base64 é obrigatório');
-    return this.idfaceService.sendVPNFile(file, 'zip');
+  @Delete('users/:terminalId/:id')
+  deleteUser(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('id', ParseIntPipe) id: number
+  ) {
+    return this.idface.deleteUserFromDevice(terminalId, id);
   }
 
-  @Post('gpio')
-  getGpioState() {
-    return this.idfaceService.gpioState();
+  @Get('users/:terminalId/:id')
+  getUser(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('id', ParseIntPipe) id: number
+  ) {
+    return this.idface.loadUserById(terminalId, id); // precisa criar esse método
+  }
+
+
+  @Get('users/:terminalId/confirm/:userId')
+  async confirmUserExists(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('userId', ParseIntPipe) userId: number,
+  ) {
+    const exists = await this.idface.confirmUserExists(terminalId, userId);
+    return { exists };
+  }
+
+
+  @Post('foto/:terminalId')
+  @UseInterceptors(FileInterceptor('foto'))
+  uploadFoto(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('user_id', ParseIntPipe) userId: number
+  ) {
+    return this.idface.uploadUserPhoto(terminalId, file.buffer, userId);
+  }
+
+  @Post('users/:terminalId/:id/group/:groupId')
+  assignUserToGroup(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('id', ParseIntPipe) userId: number,
+    @Param('groupId', ParseIntPipe) groupId: number
+  ) {
+    return this.idface.assignUserToGroup(terminalId, userId, groupId);
   }
 }
