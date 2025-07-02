@@ -28,13 +28,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import './polyfill';
 dotenv.config();
 
-console.log('MySQL config:', {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USERNAME,
-  pass: process.env.DB_PASSWORD,
-  db: process.env.DB_DATABASE,
-});
-
 @Module({
   imports: [
     // 1) ConfigModule carrega suas configs (e variáveis de ambiente se houver um .env)
@@ -42,28 +35,29 @@ console.log('MySQL config:', {
       isGlobal: true,
       // se você quiser ler também de um .env, remova ou ajuste ignoreEnvFile
       ignoreEnvFile: true,
-      load: [() => ({
-        DB_TYPE: 'sqlite',
-        DB_DATABASE: './data/controle_acesso.sqlite',
-        IDFACE_BASE_URL: 'http://192.168.18.55',
-      })],
+      load: [
+        () => ({
+          DB_TYPE: 'sqlite',
+          DB_DATABASE: './data/controle_acesso.sqlite',
+          IDFACE_BASE_URL: 'http://192.168.18.55',
+        }),
+      ],
     }),
     // 2) TypeORM usando forRootAsync para injetar o ConfigService
+    // AppModule – só troca a fábrica
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        type: config.get<'sqlite'>('DB_TYPE'),
-        database: config.get<string>('DB_DATABASE'),
-        entities: [
-          __dirname + '/**/*.entity{.ts,.js}',
-        ],
+      useFactory: (cfg: ConfigService) => ({
+        type: 'sqlite',                              // literal
+        database: cfg.get<string>('DB_DATABASE'),    // './data/controle_acesso.sqlite'
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
         synchronize: true,
         autoLoadEntities: true,
-        dropSchema: false,     // cuidado: apaga o banco a cada start
-        // logging: true,
+        logging: false,
       }),
     }),
+
     UsersModule,
     DepartmentsModule,
     SchedulesModule,
@@ -77,10 +71,9 @@ console.log('MySQL config:', {
     PessoaModule,
     LicenseModule,
     TerminalsModule,
-    VisitorModule
+    VisitorModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule { }
-

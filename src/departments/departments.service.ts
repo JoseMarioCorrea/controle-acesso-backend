@@ -20,9 +20,9 @@ export class DepartmentsService {
     private readonly visitorRepo: Repository<Visitante>,
     @InjectRepository(Grupo)
     private readonly grupoRepo: Repository<Grupo>,
-  ) { }
+  ) {}
 
- /* async create(dto: CreateDepartmentDto): Promise<Department> {
+  /* async create(dto: CreateDepartmentDto): Promise<Department> {
     // carga de usuários e visitantes, se passar ids
     const usuarios = dto.userIds?.length
       ? await this.userRepo.findByIds(dto.userIds)
@@ -91,5 +91,4 @@ export class DepartmentsService {
       where: { department_id: departmentId },
     });
   }
-
 }

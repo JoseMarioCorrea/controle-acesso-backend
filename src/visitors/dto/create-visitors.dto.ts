@@ -1,10 +1,5 @@
 import { Type } from 'class-transformer';
-import {
-  IsOptional,
-  IsString,
-  IsEmail,
-  IsInt,
-} from 'class-validator';
+import { IsOptional, IsString, IsEmail, IsInt } from 'class-validator';
 
 export class CreateVisitorDto {
   @IsString()

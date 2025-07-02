@@ -7,7 +7,7 @@ import { Visitante } from './visitor.entity';
 import { Pessoa } from '../pessoa/pessoa.entity';
 import { PessoaModule } from '../pessoa/pessoa.module';
 import { IdfaceModule } from 'src/devices/idface.module';
-import { Department } from 'src/departments/department.entity';
+import { Department } from '../departments/department.entity';
 
 @Module({
   imports: [

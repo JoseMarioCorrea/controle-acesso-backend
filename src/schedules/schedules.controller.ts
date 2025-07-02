@@ -33,7 +33,10 @@ export class SchedulesController {
   }
 
   @Put(':id')
-  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateScheduleDto) {
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateScheduleDto,
+  ) {
     return this.schedulesService.update(id, dto);
   }
 

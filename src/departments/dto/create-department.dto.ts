@@ -2,7 +2,7 @@
 import { IsNotEmpty, IsNumber, IsOptional, IsArray } from 'class-validator';
 
 export class CreateDepartmentDto {
-  @IsNotEmpty() 
+  @IsNotEmpty()
   nome: string;
 
   @IsNumber()

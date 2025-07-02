@@ -11,12 +11,16 @@ async function bootstrap() {
   // Carrega .env (caso você use variáveis de ambiente)
   dotenv.config({ path: join(__dirname, '..', '.env') });
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  
+
   app.useStaticAssets(join(__dirname, '..', 'uploads'), {
     prefix: '/uploads',
   });
   // Habilita CORS para todas as origens
-  app.enableCors({ origin: '*', methods: ['GET', 'POST', 'PUT', 'DELETE'], credentials: true });
+  app.enableCors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+  });
 
   // Validação global de DTOs
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));

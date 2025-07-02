@@ -10,7 +10,7 @@ import { Department } from '../departments/department.entity';
 @Injectable()
 export class UsersService {
   findAll() {
-      throw new Error('Method not implemented.');
+    throw new Error('Method not implemented.');
   }
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
@@ -30,7 +30,6 @@ export class UsersService {
 
     return this.userRepo.save(user);
   }
-
 
   async findOne(id: number): Promise<User> {
     const user = await this.userRepo.findOne({

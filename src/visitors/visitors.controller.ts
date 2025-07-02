@@ -25,13 +25,13 @@ import { CreateVisitorDto } from './dto/create-visitors.dto';
 @Controller('visitors')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class VisitorsController {
-  constructor(private readonly visitorsService: VisitorsService) { }
+  constructor(private readonly visitorsService: VisitorsService) {}
 
   @Post()
   @UseInterceptors(FileInterceptor('foto'))
   create(
     @UploadedFile() foto: Express.Multer.File,
-    @Body() dto: CreateVisitorDto
+    @Body() dto: CreateVisitorDto,
   ) {
     return this.visitorsService.create(dto);
   }
@@ -39,11 +39,13 @@ export class VisitorsController {
   @Get()
   async findAllVisitors(): Promise<Visitante[]> {
     const all = await this.visitorsService.findAll();
-    return all
+    return all;
   }
 
   @Get(':id')
-  async findVisitorById(@Param('id', ParseIntPipe) id: number): Promise<Visitante> {
+  async findVisitorById(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<Visitante> {
     const visitante = await this.visitorsService.findById(id);
     if (visitante == null) {
       throw new Error('Visitante não encontrado');
@@ -68,9 +70,8 @@ export class VisitorsController {
   @Delete(':id')
   remove(
     @Param('id', ParseIntPipe) id: number,
-    @Query('terminalId', ParseIntPipe) terminalId: number
+    @Query('terminalId', ParseIntPipe) terminalId: number,
   ) {
     return this.visitorsService.remove(id, terminalId);
   }
-
 }

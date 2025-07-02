@@ -1,9 +1,18 @@
 // src/pessoa/pessoas.controller.ts
 import {
-  Controller, Post, Get, Body, Param, Delete, Put,
-  UseInterceptors, UploadedFile, ParseIntPipe,
-  UsePipes, ValidationPipe,
-  Query
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Delete,
+  Put,
+  UseInterceptors,
+  UploadedFile,
+  ParseIntPipe,
+  UsePipes,
+  ValidationPipe,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PessoasService } from './pessoas.service';
@@ -15,7 +24,7 @@ import { Pessoa } from './pessoa.entity';
 @Controller('pessoas')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class PessoasController {
-  constructor(private readonly pessoasService: PessoasService) { }
+  constructor(private readonly pessoasService: PessoasService) {}
 
   @Post()
   create(
@@ -49,9 +58,8 @@ export class PessoasController {
   @Delete(':id/:terminalId')
   remove(
     @Param('id', ParseIntPipe) id: number,
-    @Param('terminalId', ParseIntPipe) terminalId: number
+    @Param('terminalId', ParseIntPipe) terminalId: number,
   ) {
     return this.pessoasService.remove(id, terminalId);
   }
 }
-

@@ -6,15 +6,15 @@ import { User } from '../users/user.entity';
 import { Visitante } from '../visitors/visitor.entity';
 import { DepartmentsService } from './departments.service';
 import { DepartmentsController } from './departments.controller';
-import { Grupo } from 'src/groups/grupo.entity';
+import { Grupo } from '../groups/grupo.entity';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Department,    // já existia
-      User,          // adicione este
-      Visitante,     // e este
-      Grupo
+      Department, // já existia
+      User, // adicione este
+      Visitante, // e este
+      Grupo,
     ]),
   ],
   controllers: [DepartmentsController],

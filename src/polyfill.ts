@@ -6,8 +6,8 @@ if (typeof globalThis.crypto === 'undefined') {
   Object.defineProperty(globalThis, 'crypto', {
     value: webcrypto,
     configurable: true,
-    enumerable:   false,
-    writable:     false,
+    enumerable: false,
+    writable: false,
   });
 } else if (typeof (globalThis.crypto as any).randomUUID !== 'function') {
   // adiciona randomUUID se faltar

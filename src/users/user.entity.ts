@@ -44,5 +44,5 @@ export class User {
   grupos: Grupo[];
 
   @Column({ default: true })
-  released: boolean
+  released: boolean;
 }

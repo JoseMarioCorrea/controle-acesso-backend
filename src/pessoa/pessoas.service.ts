@@ -1,5 +1,12 @@
 // src/pessoa/pessoas.service.ts
-import { Injectable, NotFoundException, Logger, BadRequestException, forwardRef, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  Logger,
+  BadRequestException,
+  forwardRef,
+  Inject,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
 import { Pessoa } from './pessoa.entity';
@@ -18,8 +25,9 @@ export class PessoasService {
     @InjectRepository(Grupo)
     private readonly grupoRepo: Repository<Grupo>,
     @Inject(forwardRef(() => IdfaceService))
-    private readonly idfaceService: IdfaceService, private readonly idface: IdfaceService,           // ← injete aqui
-  ) { }
+    private readonly idfaceService: IdfaceService,
+    private readonly idface: IdfaceService, // ← injete aqui
+  ) {}
 
   async create(dto: CreatePessoaDto): Promise<Pessoa> {
     const { grupos, ...rest } = dto;
@@ -37,15 +45,23 @@ export class PessoasService {
       const terminalId = dto.terminalId;
       const nome = saved.nome;
       const registro = saved.registro;
-      const saveId: any = saved.userIdIdface
+      const saveId: any = saved.userIdIdface;
       if (typeof terminalId !== 'number') {
-        throw new BadRequestException('terminalId é obrigatório para criar usuário no iDFace');
+        throw new BadRequestException(
+          'terminalId é obrigatório para criar usuário no iDFace',
+        );
       }
       if (!saved.inativo) {
-       idfaceId = await this.idface.createUserOnDevice(terminalId, nome, registro);
+        idfaceId = await this.idface.createUserOnDevice(
+          terminalId,
+          nome,
+          registro,
+        );
         this.logger.log(`Pessoa ${saved.id} liberada no iDFace`);
       } else {
-        this.logger.warn(`Pessoa ${saved.id} está inativa e não será liberada no iDFace`);
+        this.logger.warn(
+          `Pessoa ${saved.id} está inativa e não será liberada no iDFace`,
+        );
       }
 
       this.logger.log(`Pessoa ${saved.id} criada no iDFace`);
@@ -79,8 +95,8 @@ export class PessoasService {
     // opcional: reenviando configurações de autenticação ao iDFace
     try {
       const terminalId = dto.terminalId; // ajuste conforme a estrutura do seu DTO
-      const id = saved.id;           // ajuste conforme o campo correto
-      const registro = saved.registro;   // ajuste conforme o campo correto
+      const id = saved.id; // ajuste conforme o campo correto
+      const registro = saved.registro; // ajuste conforme o campo correto
       await this.idface.updateUserOnDevice(terminalId, id, registro);
       this.logger.log(`Pessoa ${id} reconfigurada no iDFace`);
     } catch (err) {
@@ -97,7 +113,6 @@ export class PessoasService {
     }
   }
 
-
   async remove(id: number, terminalId: number): Promise<void> {
     const pessoa = await this.repo.findOne({ where: { id } });
 
@@ -112,7 +127,9 @@ export class PessoasService {
     if (response) {
       try {
         await this.idface.deleteUserFromDevice(terminalId, id);
-        this.logger.log(`✔ Pessoa ${id} removida do terminal iDFace ${terminalId}`);
+        this.logger.log(
+          `✔ Pessoa ${id} removida do terminal iDFace ${terminalId}`,
+        );
       } catch (err) {
         this.logger.error(`❌ Falha ao remover pessoa ${id} do iDFace`, err);
       }
@@ -120,11 +137,12 @@ export class PessoasService {
       // Remove do terminal iDFace
       try {
         await this.idface.deleteUserFromDevice(terminalId, id);
-        this.logger.log(`✔ Pessoa ${id} removida do terminal iDFace ${terminalId}`);
+        this.logger.log(
+          `✔ Pessoa ${id} removida do terminal iDFace ${terminalId}`,
+        );
       } catch (err) {
         this.logger.error(`❌ Falha ao remover pessoa ${id} do iDFace`, err);
       }
     }
   }
-
 }

@@ -59,9 +59,7 @@ export class DepartmentsController {
    * Cria um departamento e, em seguida, um grupo padrão do tipo 3
    */
   @Post()
-  async create(
-    @Body() dto: CreateDepartmentDto,
-  ): Promise<Department> {
+  async create(@Body() dto: CreateDepartmentDto): Promise<Department> {
     // 1) cria o departamento
     const dept = this.deptRepo.create(dto);
     await this.deptRepo.save(dept);

@@ -65,9 +65,9 @@ export class Pessoa {
   grupos: Grupo[];
 
   @Column({ nullable: true })
-  idfaceId: number;    // ID no equipamento iDFace
+  idfaceId: number; // ID no equipamento iDFace
 
-  @Column ({default: false})
+  @Column({ default: false })
   isVisitante: boolean;
   registro: any;
 

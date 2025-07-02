@@ -55,7 +55,7 @@ export class CreatePessoaDto {
   @IsOptional()
   @IsString()
   idUsuario?: string;
-  
+
   @IsOptional()
   @IsString()
   observacoes?: string;

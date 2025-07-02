@@ -1,10 +1,17 @@
 // src/devices/idface.controller.ts
 import {
-  Controller, Post, Put, Delete, Body, Param, ParseIntPipe,
-  UsePipes, ValidationPipe,
+  Controller,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  ParseIntPipe,
+  UsePipes,
+  ValidationPipe,
   Get,
   UploadedFile,
-  UseInterceptors
+  UseInterceptors,
 } from '@nestjs/common';
 import { IdfaceService } from './idface.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -12,13 +19,13 @@ import { FileInterceptor } from '@nestjs/platform-express';
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @Controller('idface')
 export class IdfaceController {
-  constructor(private readonly idface: IdfaceService) { }
+  constructor(private readonly idface: IdfaceService) {}
 
   @Post('login/:terminalId')
   login(
     @Param('terminalId', ParseIntPipe) terminalId: number,
     @Body('login') login: string,
-    @Body('password') password: string
+    @Body('password') password: string,
   ) {
     return this.idface.login(terminalId, login, password);
   }
@@ -46,7 +53,7 @@ export class IdfaceController {
   @Post('time/:terminalId')
   time(
     @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Body('datetime') dt: string
+    @Body('datetime') dt: string,
   ) {
     return this.idface.setDateTime(terminalId, dt);
   }
@@ -54,7 +61,7 @@ export class IdfaceController {
   @Post('network/:terminalId')
   network(
     @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Body() cfg: any
+    @Body() cfg: any,
   ) {
     return this.idface.configureNetwork(terminalId, cfg);
   }
@@ -72,7 +79,7 @@ export class IdfaceController {
       name,
       registration ?? '',
       password ?? '',
-      salt ?? ''
+      salt ?? '',
     );
     return { userId };
   }
@@ -81,7 +88,7 @@ export class IdfaceController {
   updateUser(
     @Param('terminalId', ParseIntPipe) terminalId: number,
     @Param('id', ParseIntPipe) id: number,
-    @Body() fields: Record<string, any>
+    @Body() fields: Record<string, any>,
   ) {
     return this.idface.updateUserOnDevice(terminalId, id, fields);
   }
@@ -89,7 +96,7 @@ export class IdfaceController {
   @Delete('users/:terminalId/:id')
   deleteUser(
     @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number,
   ) {
     return this.idface.deleteUserFromDevice(terminalId, id);
   }
@@ -97,11 +104,10 @@ export class IdfaceController {
   @Get('users/:terminalId/:id')
   getUser(
     @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Param('id', ParseIntPipe) id: number
+    @Param('id', ParseIntPipe) id: number,
   ) {
     return this.idface.loadUserById(terminalId, id); // precisa criar esse método
   }
-
 
   @Get('users/:terminalId/confirm/:userId')
   async confirmUserExists(
@@ -116,7 +122,7 @@ export class IdfaceController {
   @UseInterceptors(FileInterceptor('foto'))
   testUserImage(
     @Param('terminalId', ParseIntPipe) terminalId: number,
-    @UploadedFile() file: Express.Multer.File
+    @UploadedFile() file: Express.Multer.File,
   ) {
     return this.idface.testUserImage(terminalId, file.buffer);
   }
@@ -126,7 +132,7 @@ export class IdfaceController {
   uploadFoto(
     @Param('terminalId', ParseIntPipe) terminalId: number,
     @UploadedFile() file: Express.Multer.File,
-    @Body('user_id', ParseIntPipe) userId: number
+    @Body('user_id', ParseIntPipe) userId: number,
   ) {
     return this.idface.uploadUserPhoto(terminalId, file.buffer, userId);
   }
@@ -135,16 +141,15 @@ export class IdfaceController {
   assignUserToGroup(
     @Param('terminalId', ParseIntPipe) terminalId: number,
     @Param('id', ParseIntPipe) userId: number,
-    @Param('groupId', ParseIntPipe) groupId: number
+    @Param('groupId', ParseIntPipe) groupId: number,
   ) {
     return this.idface.assignUserToGroup(terminalId, userId, groupId);
   }
 
   @Get('users/:terminalId/last-id')
-  getLastUserId(
-    @Param('terminalId', ParseIntPipe) terminalId: number
-  ) {
-    return this.idface.getLastUserId(terminalId).then(id => ({ lastUserId: id }));
+  getLastUserId(@Param('terminalId', ParseIntPipe) terminalId: number) {
+    return this.idface
+      .getLastUserId(terminalId)
+      .then((id) => ({ lastUserId: id }));
   }
-
 }

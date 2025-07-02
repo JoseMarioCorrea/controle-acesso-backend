@@ -32,7 +32,7 @@ export class CreateUserDto {
   @IsOptional()
   @IsNumber()
   terminalId?: number;
-  
+
   @IsBoolean()
   @IsOptional()
   released?: boolean;

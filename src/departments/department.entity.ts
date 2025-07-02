@@ -11,7 +11,7 @@ import {
 import { User } from '../users/user.entity';
 import { Visitante } from '../visitors/visitor.entity';
 import { Terminal } from '../terminals/terminal.entity';
-import { Grupo } from 'src/groups/grupo.entity';
+import { Grupo } from '../groups/grupo.entity';
 
 @Entity()
 export class Department {

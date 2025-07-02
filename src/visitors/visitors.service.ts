@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { InjectRepository } from "@nestjs/typeorm";
-import { IdfaceService } from "src/devices/idface.service";
-import { Repository } from "typeorm";
-import { Visitante } from "./visitor.entity";
-import { CreateVisitorDto } from "./dto/create-visitors.dto";
-import { UpdateVisitorDto } from "./dto/update-visitor.dto";
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { IdfaceService } from 'src/devices/idface.service';
+import { Repository } from 'typeorm';
+import { Visitante } from './visitor.entity';
+import { CreateVisitorDto } from './dto/create-visitors.dto';
+import { UpdateVisitorDto } from './dto/update-visitor.dto';
 
 @Injectable()
 export class VisitorsService {
@@ -12,7 +12,7 @@ export class VisitorsService {
     @InjectRepository(Visitante)
     private readonly visitorRepo: Repository<Visitante>,
     private readonly idface: IdfaceService,
-  ) { }
+  ) {}
 
   async create(dto: CreateVisitorDto): Promise<Visitante> {
     console.log('DTO recebido:', dto);
@@ -26,15 +26,23 @@ export class VisitorsService {
 
     // Certifique-se de que 'saved' é um objeto, não um array
     if (Array.isArray(saved)) {
-      throw new Error('Erro interno: múltiplos visitantes salvos, esperado apenas um.');
+      throw new Error(
+        'Erro interno: múltiplos visitantes salvos, esperado apenas um.',
+      );
     }
 
     if (!dto.nome?.trim()) {
-      throw new Error('Nome do visitante é obrigatório para o cadastro no iDFace');
+      throw new Error(
+        'Nome do visitante é obrigatório para o cadastro no iDFace',
+      );
     }
 
     await this.idface.login(dto.terminalId, 'admin', 'admin');
-    await this.idface.createUserOnDevice(dto.terminalId, dto.nome, dto.matricula);
+    await this.idface.createUserOnDevice(
+      dto.terminalId,
+      dto.nome,
+      dto.matricula,
+    );
 
     return saved;
   }
@@ -70,7 +78,9 @@ export class VisitorsService {
     if (terminalId) {
       await this.idface.login(terminalId, 'admin', 'admin');
       // Ajusta validade no iDFace
-      const endTimestamp = Math.floor(new Date(`${shelfLifeDate}T${shelfLifeTime}`).getTime() / 1000);
+      const endTimestamp = Math.floor(
+        new Date(`${shelfLifeDate}T${shelfLifeTime}`).getTime() / 1000,
+      );
       await this.idface.modifyObjects(terminalId, {
         object: 'users',
         values: { begin_time: 0, end_time: endTimestamp },

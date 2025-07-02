@@ -2,27 +2,30 @@
   "name": "controle-acesso-backend",
   "version": "0.0.1",
   "private": true,
-  "bin": "dist/main.js",
+  "bin": "dist/bundle.js",
   "scripts": {
+    "clean": "rimraf dist release",
     "build": "nest build",
-    "bundle:win": "npm run build && npx nexe dist/main.js --target windows-x64-18.5.0 --output dist/ControleAcesso.exe --resource \"../controle-acesso-frontend/build/**/*\" --resource \"data/**/*\" --resource \"uploads/**/*\"",
-    "start": "nest start",
-    "start:dev": "nest start --watch",
-    "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest"
+    "bundle": "esbuild dist/main.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/bundle.js --external:sqlite3 --external:@nestjs/websockets/socket-module --external:@nestjs/microservices/microservices-module --external:@nestjs/microservices --external:class-transformer/storage",
+    "pkg:win": "npm run clean && npm run build && npm run bundle && pkg dist/bundle.js --targets node18-win-x64 --output release/ControleAcesso.exe",
+    "installer:win": "\"C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe\" setup.iss",
+    "release:win": "npm run pkg:win && npm run installer:win"
   },
   "pkg": {
     "scripts": [
-      "dist/**/*.js"
+      "dist/**/*.js",
+      "node_modules/axios/dist/**/*.cjs",
+      "node_modules/sqlite3/lib/**/*.js"
     ],
     "assets": [
-      "../controle-acesso-frontend/build/**/*",
+      ".env",
       "data/**/*.sqlite",
-      "uploads/**/*"
+      "uploads/**/*",
+      "node_modules/sqlite3/lib/binding/**/node_sqlite3.node"
     ]
   },
   "dependencies": {
+    "@chakra-ui/icons": "^2.2.4",
     "@chakra-ui/stat": "^2.1.1",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/common": "^11.1.3",
@@ -43,6 +46,7 @@
     "mysql2": "^3.14.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sql.js": "^1.13.0",
     "sqlite3": "^5.1.7",
     "typeorm": "^0.3.24"
   },
@@ -59,6 +63,7 @@
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.7",
     "@types/supertest": "^6.0.2",
+    "esbuild": "^0.18.17",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",

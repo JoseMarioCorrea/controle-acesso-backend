@@ -12,8 +12,8 @@ export class IdfaceService {
 
   constructor(
     private readonly http: HttpService,
-    private readonly terminalService: TerminalsService
-  ) { }
+    private readonly terminalService: TerminalsService,
+  ) {}
 
   private async getHttp(terminalId: number) {
     const terminal = await this.terminalService.findById(terminalId);
@@ -21,11 +21,17 @@ export class IdfaceService {
     return this.http.axiosRef.create({ baseURL });
   }
 
-  private async ensureSession(terminalId: number, login = 'admin', password = 'admin') {
+  private async ensureSession(
+    terminalId: number,
+    login = 'admin',
+    password = 'admin',
+  ) {
     const http = await this.getHttp(terminalId);
     const resp = await http.post('/login.fcgi', { login, password });
     this.sessions[terminalId] = resp.data.session;
-    this.logger.log(`✔ Login terminal ${terminalId}: session=${resp.data.session}`);
+    this.logger.log(
+      `✔ Login terminal ${terminalId}: session=${resp.data.session}`,
+    );
   }
 
   async login(terminalId: number, login: string, password: string) {
@@ -43,7 +49,9 @@ export class IdfaceService {
   async validateSession(terminalId: number) {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
-    const resp = await http.get(`/session/valid?session=${this.sessions[terminalId]}`);
+    const resp = await http.get(
+      `/session/valid?session=${this.sessions[terminalId]}`,
+    );
     return { valid: resp.data.valid };
   }
 
@@ -69,14 +77,14 @@ export class IdfaceService {
       `/modify_objects.fcgi?session=${this.sessions[terminalId]}`,
       payload,
       { headers: { 'Content-Type': 'application/json' } },
-    )
+    );
   }
 
   async releaseUserOnDevice(
     terminalId: number,
     userId: number,
     name: string,
-    defaultGroupId = 1 // ID do grupo padrão
+    defaultGroupId = 1, // ID do grupo padrão
   ): Promise<void> {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
@@ -128,8 +136,6 @@ export class IdfaceService {
     this.logger.log(`✔ Usuário ${userId} liberado no terminal ${terminalId}`);
   }
 
-
-
   async reboot(terminalId: number) {
     const http = await this.getHttp(terminalId);
     await http.post(`/reboot?session=${this.sessions[terminalId]}`, {});
@@ -150,7 +156,13 @@ export class IdfaceService {
     await http.post(`/network?session=${this.sessions[terminalId]}`, cfg);
   }
 
-  async createUserOnDevice(terminalId: number, name: string, registration = '', password = '', salt = ''): Promise<number> {
+  async createUserOnDevice(
+    terminalId: number,
+    name: string,
+    registration = '',
+    password = '',
+    salt = '',
+  ): Promise<number> {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
     const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
@@ -165,7 +177,9 @@ export class IdfaceService {
       throw new BadRequestException('Erro ao criar usuário no iDFace');
     }
 
-    this.logger.log(`✔ Usuário criado: id=${userId} no terminal ${terminalId}`);
+    this.logger.log(
+      `✔ Usuário criado: id=${userId} no terminal ${terminalId}`,
+    );
 
     // Confirma se o usuário foi salvo corretamente antes de seguir
     // Liberação de acesso
@@ -173,13 +187,16 @@ export class IdfaceService {
 
     return userId;
   }
-  async confirmUserExists(terminalId: number, userId: number): Promise<boolean> {
+  async confirmUserExists(
+    terminalId: number,
+    userId: number,
+  ): Promise<boolean> {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
     const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
     const body = {
       object: 'users',
-      where: { users: { id: userId } }
+      where: { users: { id: userId } },
     };
     const response = await http.post(url, body);
     return response.data?.objects?.length > 0;
@@ -197,7 +214,11 @@ export class IdfaceService {
     return response.data.objects?.[0] ?? null;
   }
 
-  async uploadUserPhoto(terminalId: number, image: Buffer, userId: number): Promise<any> {
+  async uploadUserPhoto(
+    terminalId: number,
+    image: Buffer,
+    userId: number,
+  ): Promise<any> {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
     const timestamp = Math.floor(Date.now() / 1000);
@@ -208,11 +229,17 @@ export class IdfaceService {
     if (!response.data?.success) {
       throw new BadRequestException({ message: 'Erro ao cadastrar foto' });
     }
-    this.logger.log(`✔ Foto cadastrada para user_id=${userId} no terminal ${terminalId}`);
+    this.logger.log(
+      `✔ Foto cadastrada para user_id=${userId} no terminal ${terminalId}`,
+    );
     return response.data;
   }
 
-  async updateUserOnDevice(terminalId: number, id: number, fields: Record<string, any>) {
+  async updateUserOnDevice(
+    terminalId: number,
+    id: number,
+    fields: Record<string, any>,
+  ) {
     await this.ensureSession(terminalId);
     const http = await this.getHttp(terminalId);
     const url = `/modify_objects.fcgi?session=${this.sessions[terminalId]}`;
@@ -249,7 +276,9 @@ export class IdfaceService {
     if (!response.data?.ids?.length) {
       throw new BadRequestException('Falha ao vincular usuário ao grupo');
     }
-    this.logger.log(`✔ user_id=${userId} associado ao group_id=${groupId} no terminal ${terminalId}`);
+    this.logger.log(
+      `✔ user_id=${userId} associado ao group_id=${groupId} no terminal ${terminalId}`,
+    );
   }
 
   async testUserImage(terminalId: number, image: Buffer): Promise<any> {
@@ -271,12 +300,11 @@ export class IdfaceService {
     const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
 
     const body = {
-      object: 'users'
+      object: 'users',
     };
 
     const response = await http.post(url, body);
 
-    return response.data
+    return response.data;
   }
-
 }
