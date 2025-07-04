@@ -144,12 +144,85 @@ release/
 
 ### Dúvidas frequentes
 
-| Sintoma                                                      | Causa provável                              | Solução                                                                                                                                  |
-| ------------------------------------------------------------ | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `SQLite package has not been found installed` dentro do .exe | `sqlite3` não foi incluído pelo `pkg`       | 1. Confirme que está em **dependencies**<br>2. Verifique se o caminho `node_sqlite3.node` aparece no log de build (`--enable-pkgdebug`). |
-| `Error: sql-wasm.wasm not included`                          | Arquivo copiado mas não listado em `assets` | Adicione à lista ou remova totalmente se não usar sql.js no runtime nativo.                                                              |
+| Sintoma                                                      | Causa provável                               | Solução                                                                                                                                  |
+| ------------------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `SQLite package has not been found installed` dentro do .exe | `sqlite3` não foi incluído pelo `pkg`        | 1. Confirme que está em **dependencies**<br>2. Verifique se o caminho `node_sqlite3.node` aparece no log de build (`--enable-pkgdebug`). |
+| `Error: sql-wasm.wasm not included`                          | Arquivo copiado mas não listado em `assets`  | Adicione à lista ou remova totalmente se não usar sql.js no runtime nativo.                                                              |
+| `error: short read while indexing nul` ao fazer `git add`    | Arquivo fantasma **nul** criado pelo Windows | `del nul` e adicione `nul` ao `.gitignore` (`echo nul>> .gitignore`) depois repita `git add -A`.                                         |
+
+---
+
+## 8. Versionamento no Git (opcional)
+
+Caso deseje versionar o instalador e as alterações do build:
+
+```powershell
+# 1. Verifique os arquivos alterados
+git status -s
+
+# 2. Adicione somente o que interessa (ex.: scripts, setup.iss, README etc.)
+git add package.json package-lock.json setup.iss README*.md src/**
+
+# OU — para **forçar** e levar tudo que mudou
+# (inclusive novos arquivos e deleções)
+git add -A
+
+# 3. Faça o commit
+git commit -m "build(installer): ajustes finais do script pkg + guia markdown"
+
+# 4. Envie para o remoto
+git push origin feature/1.1.0
+
+# Se o servidor rejeitar por divergência e você tiver certeza
+# do que está fazendo, use (⚠️ sobrescreve remoto):
+# git push --force-with-lease origin feature/1.1.0
+```
+
+> **Dica**: mantenha o diretório `release/` fora do versionamento
+> adicionando‑o ao `.gitignore`, para evitar repositórios gigantes.
 
 ---
 
 **Pronto!** O backend agora pode ser instalado em qualquer PC Windows
 64 bits sem Node.js pré‑instalado e já leva o banco SQLite interno.
+
+
+
+
+
+BUILD FINAL PARA ENVIO
+
+# BACKEND -------------------------------------------------
+cd controle-acesso-backend
+npm ci
+npm run pkg:win          # cria release/controleAcesso.exe
+
+# FRONTEND ------------------------------------------------
+cd ../controle-acesso-frontend
+npm ci
+npm run pkg:win          # cria release/controleAcessoUI.exe + dist/
+:: em PowerShell ou cmd
+rd /s /q release 2>NUL
+
+mkdir release\backend\{data,uploads}
+mkdir release\frontend
+
+:: copia backend
+copy controle-acesso-backend\release\controleAcesso.exe           release\backend\
+xcopy /E /I /Y controle-acesso-backend\data\*                     release\backend\data\
+copy controle-acesso-backend\.env                                 release\backend\
+
+:: copia frontend
+copy controle-acesso-frontend\release\controleAcessoUI.exe        release\frontend\
+xcopy /E /I /Y controle-acesso-frontend\release\dist\*            release\frontend\dist\
+
+:: script de inicialização
+(
+echo @echo off
+echo echo 🔄  Iniciando Backend...
+echo start "" ".\backend\controleAcesso.exe"
+echo timeout /t 2 /nobreak ^>NUL
+echo echo 🔄  Iniciando Frontend...
+echo start "" ".\frontend\controleAcessoUI.exe"
+echo echo ✅  Tudo pronto!  Abra http://localhost:5173
+) > release\start.cmd

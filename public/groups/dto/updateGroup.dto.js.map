@@ -1,0 +1,1 @@
+{"version":3,"file":"updateGroup.dto.js","sourceRoot":"","sources":["../../../src/groups/dto/updateGroup.dto.ts"],"names":[],"mappings":";;;;;;;;;;;;AAAA,qDAA+D;AAE/D,MAAa,cAAc;IAIzB,IAAI,CAAU;IAId,SAAS,CAAU;CACpB;AATD,wCASC;AALC;IAHC,IAAA,4BAAU,GAAE;IACZ,IAAA,0BAAQ,GAAE;IACV,IAAA,wBAAM,EAAC,CAAC,EAAE,GAAG,CAAC;;4CACD;AAId;IAFC,IAAA,4BAAU,GAAE;IACZ,IAAA,0BAAQ,GAAE;;iDACQ"}

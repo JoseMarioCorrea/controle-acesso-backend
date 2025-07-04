@@ -1,4 +1,8 @@
+// src/app.module.ts
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { dirname, join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -10,54 +14,36 @@ import { ReportsModule } from './reports/reports.module';
 import { SystemModule } from './system/system.module';
 import { NetworkModule } from './network/network.module';
 import { AuthModule } from './auth/auth.module';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './users/user.entity';
-import { Department } from './departments/department.entity';
-import { Schedule } from './schedules/schedule.entity';
-import { Holiday } from './holidays/holiday.entity';
-import { IdfaceModule } from './devices/idface.module';
-import * as dotenv from 'dotenv';
-import { Pessoa } from './pessoa/pessoa.entity';
+import { IdfaceModule } from './devices/idface.module'; 
 import { PessoaModule } from './pessoa/pessoa.module';
 import { LicenseModule } from './license/license.module';
 import { TerminalsModule } from './terminals/terminals.module';
 import { VisitorModule } from './visitors/visitors.module';
-import { Visitante } from './visitors/visitor.entity';
-import { Terminal } from './terminals/terminal.entity';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 import './polyfill';
-dotenv.config();
 
 @Module({
   imports: [
-    // 1) ConfigModule carrega suas configs (e variáveis de ambiente se houver um .env)
-    ConfigModule.forRoot({
-      isGlobal: true,
-      // se você quiser ler também de um .env, remova ou ajuste ignoreEnvFile
-      ignoreEnvFile: true,
-      load: [
-        () => ({
-          DB_TYPE: 'sqlite',
-          DB_DATABASE: './data/controle_acesso.sqlite',
-          IDFACE_BASE_URL: 'http://192.168.18.55',
-        }),
-      ],
-    }),
-    // 2) TypeORM usando forRootAsync para injetar o ConfigService
-    // AppModule – só troca a fábrica
+    /* Config global (ainda pode usar env se quiser) */
+    ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+
+    /* TypeORM — fábrica com baseDir dinâmico */
     TypeOrmModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (cfg: ConfigService) => ({
-        type: 'sqlite',                              // literal
-        database: cfg.get<string>('DB_DATABASE'),    // './data/controle_acesso.sqlite'
-        entities: [__dirname + '/**/*.entity{.ts,.js}'],
-        synchronize: true,
-        autoLoadEntities: true,
-        logging: false,
-      }),
+      useFactory: () => {
+        const runningInPkg = typeof (process as any).pkg !== 'undefined';
+        const baseDir = runningInPkg ? dirname(process.execPath) : __dirname;
+
+        return {
+          type: 'sqlite',
+          database: join(baseDir, 'data', 'controle_acesso.sqlite'),
+          entities: [__dirname + '/**/*.entity{.ts,.js}'],
+          synchronize: true,
+          autoLoadEntities: true,
+          logging: false,
+        };
+      },
     }),
 
+    /*  módulos da aplicação */
     UsersModule,
     DepartmentsModule,
     SchedulesModule,
