@@ -248,7 +248,7 @@ export class IdfaceService {
       values: fields,
       where: { users: { id } },
     };
-    await http.post(url, body);
+    await http.put(url, body);
     this.logger.log(`✔ Atualizado user id=${id} no terminal ${terminalId}`);
   }
 

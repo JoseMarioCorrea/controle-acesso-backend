@@ -21,19 +21,20 @@ import { UpdatePessoaDto } from '../pessoa/dto/updatePessoa.dto';
 import { Visitante } from './visitor.entity';
 import { Express } from 'express';
 import { CreateVisitorDto } from './dto/create-visitors.dto';
+import { UpdateVisitorDto } from './dto/update-visitor.dto';
 
 @Controller('visitors')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class VisitorsController {
-  constructor(private readonly visitorsService: VisitorsService) {}
+  constructor(private readonly visitorsService: VisitorsService) { }
 
   @Post()
   @UseInterceptors(FileInterceptor('foto'))
-  create(
+  async create(
     @UploadedFile() foto: Express.Multer.File,
     @Body() dto: CreateVisitorDto,
-  ) {
-    return this.visitorsService.create(dto);
+  ): Promise<Visitante> {
+    return this.visitorsService.create(dto, foto);
   }
 
   @Get()
@@ -60,11 +61,8 @@ export class VisitorsController {
     @Body() dto: UpdatePessoaDto,
     @UploadedFile() foto?: Express.Multer.File,
   ): Promise<Visitante> {
-    const payload = {
-      ...dto,
-      isVisitante: true, // mantém true mesmo na edição
-    };
-    return this.visitorsService.update(id, payload);
+    const payload = { ...dto, isVisitante: true };
+    return this.visitorsService.update(id, payload, foto);
   }
 
   @Delete(':id')
@@ -74,4 +72,22 @@ export class VisitorsController {
   ) {
     return this.visitorsService.remove(id, terminalId);
   }
+
+  @Get('idface/:idface')
+  findByIdFace(
+    @Param('idface', ParseIntPipe) idface: number,
+  ) {
+    return this.visitorsService.findByIdFace(idface);
+  }
+
+  @Put('idface/:idface')
+  @UseInterceptors(FileInterceptor('foto'))
+  updateByIdFace(
+    @Param('idface', ParseIntPipe) idface: number,
+    @Body() dto: UpdateVisitorDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.visitorsService.updateByIdFace(idface, dto, file);
+  }
+
 }

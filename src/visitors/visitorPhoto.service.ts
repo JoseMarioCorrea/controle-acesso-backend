@@ -27,29 +27,35 @@ export class VisitorPhotoService {
      */
     async savePhoto(
         visitorId: number,
-        file: Express.Multer.File,          // recebido pelo FileInterceptor
+        file: Express.Multer.File,
     ): Promise<string> {
-        try {
-            /* garante pasta */
-            const dir = path.join(this.baseDir, String(visitorId));
-            await fs.mkdir(dir, { recursive: true });
+        // 1) garante pasta
+        const dir = path.join(this.baseDir, String(visitorId));
+        await fs.mkdir(dir, { recursive: true });
 
-            /* monta nome único preservando extensão (default .jpg) */
-            const ext = path.extname(file.originalname) || '.jpg';
-            const filename = `${Date.now()}-${uuid()}${ext}`;
-            const finalPath = path.join(dir, filename);
+        // 2) gera nome + caminho final
+        const ext = path.extname(file.originalname) || '.jpg';
+        const filename = `${Date.now()}-${uuid()}${ext}`;
+        const finalPath = path.join(dir, filename);
 
-            /* grava arquivo */
+        // 3) grava: ou do buffer (se usar memoryStorage) ou do diskStorage
+        if (file.buffer && file.buffer.length) {
             await fs.writeFile(finalPath, file.buffer);
-
-            /* devolve caminho que o front conseguirá acessar */
-            return `/uploads/visitors/${visitorId}/${filename}`;
-        } catch (err) {
-            throw new InternalServerErrorException(
-                'Erro ao salvar foto do visitante',
-                err instanceof Error ? err.message : String(err),
-            );
+        } else if ('path' in file && file.path) {
+            // multer gravou em disco antes, copia do temp pra nosso uploads
+            await fs.copyFile(file.path, finalPath);
+        } else {
+            throw new InternalServerErrorException('Nenhum dado de arquivo recebido');
         }
+
+        // 4) devolve a URL pública
+        return `/uploads/visitors/${visitorId}/${filename}`;
+
+    } catch(err) {
+        throw new InternalServerErrorException(
+            'Erro ao salvar foto do visitante',
+            err instanceof Error ? err.message : String(err),
+        );
     }
     /* acrescente dentro da classe VisitorPhotoService */
 

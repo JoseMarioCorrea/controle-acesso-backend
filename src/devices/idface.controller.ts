@@ -12,14 +12,17 @@ import {
   Get,
   UploadedFile,
   UseInterceptors,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { IdfaceService } from './idface.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @Controller('idface')
 export class IdfaceController {
-  constructor(private readonly idface: IdfaceService) {}
+  constructor(private readonly idface: IdfaceService) { }
 
   @Post('login/:terminalId')
   login(
@@ -128,7 +131,9 @@ export class IdfaceController {
   }
 
   @Post('foto/:terminalId')
-  @UseInterceptors(FileInterceptor('foto'))
+  @UseInterceptors(FileInterceptor('foto', {
+    storage: memoryStorage(),
+  }))
   uploadFoto(
     @Param('terminalId', ParseIntPipe) terminalId: number,
     @UploadedFile() file: Express.Multer.File,
@@ -136,6 +141,30 @@ export class IdfaceController {
   ) {
     return this.idface.uploadUserPhoto(terminalId, file.buffer, userId);
   }
+
+  @Put('foto/:terminalId')
+  @UseInterceptors(FileInterceptor('foto', {
+    storage: memoryStorage(),
+  }))
+  reUploadFoto(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('user_id', ParseIntPipe) userId: number,
+  ) {
+    return this.idface.uploadUserPhoto(terminalId, file.buffer, userId);
+  }
+
+
+  @Put('users/:id/terminal/:terminalId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async updateUserOnDevice(
+    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() fields: Record<string, any>,
+  ): Promise<void> {
+    await this.idface.updateUserOnDevice(terminalId, id, fields);
+  }
+
 
   @Post('users/:terminalId/:id/group/:groupId')
   assignUserToGroup(

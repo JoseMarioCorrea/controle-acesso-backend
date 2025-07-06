@@ -23,17 +23,26 @@ import { VisitorPhotoService } from './visitorPhoto.service';
  */
 @Controller('uploads/visitors')
 export class VisitorPhotoController {
-  constructor(private readonly photoSvc: VisitorPhotoService) {}
+  constructor(private readonly photoSvc: VisitorPhotoService) { }
 
   /** ­POST /uploads/visitors/:id  (campo FormData **foto**) */
-  @Post(':id')
+  @Post(':visitorId')
   @UseInterceptors(FileInterceptor('foto'))
   async upload(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('visitorId', ParseIntPipe) visitorId: number,
     @UploadedFile() file: Express.Multer.File,
-  ) {
-    const path = await this.photoSvc.savePhoto(id, file);
-    return { path }; // →  { "path": "/uploads/visitors/42/170000000-xxxx.jpg" }
+  ): Promise<{ path: string }> {
+    const path = await this.photoSvc.savePhoto(visitorId, file);
+    return { path };
+  }
+
+  @Get(':visitorId/latest')
+  async latest(
+    @Param('visitorId', ParseIntPipe) visitorId: number,
+  ): Promise<{ path: string }> {
+    const path = await this.photoSvc.getLatest(visitorId);
+    if (!path) throw new NotFoundException('Nenhuma foto encontrada');
+    return { path };
   }
 
   /** ­GET /uploads/visitors/:id  → lista nomes de arquivos */
@@ -42,11 +51,4 @@ export class VisitorPhotoController {
     return this.photoSvc.listPhotos(id);
   }
 
-  /** ­GET /uploads/visitors/:id/latest  → foto mais recente */
-  @Get(':id/latest')
-  async latest(@Param('id', ParseIntPipe) id: number) {
-    const photo = await this.photoSvc.getLatest(id);
-    if (!photo) throw new NotFoundException('Nenhuma foto encontrada');
-    return { path: photo };
-  }
 }
