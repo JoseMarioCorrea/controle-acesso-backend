@@ -1,5 +1,13 @@
 import { Type } from 'class-transformer';
-import { IsOptional, IsString, IsEmail, IsInt } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEmail,
+  IsInt,
+  IsNumber,
+  IsArray,
+  ArrayUnique,
+} from 'class-validator';
 
 export class CreateVisitorDto {
   @IsString()
@@ -7,11 +15,29 @@ export class CreateVisitorDto {
 
   @IsOptional()
   @IsString()
-  visitor_rg?: string;
+  documentType?: string;
 
   @IsOptional()
   @IsString()
-  visitor_cpf?: string;
+  idUsuario?: string;
+
+  // RG ou CPF do visitante
+  @IsOptional()
+  @IsString()
+  rg?: string;
+
+  @IsOptional()
+  @IsString()
+  cpf?: string;
+
+  // Caso queira guardar o nome da empresa (não obrigatório se usar visitedCompanyId)
+  @IsOptional()
+  @IsString()
+  visitorCompany?: string;
+
+  @IsOptional()
+  @IsString()
+  comments?: string;
 
   @IsOptional()
   @IsString()
@@ -23,22 +49,6 @@ export class CreateVisitorDto {
 
   @IsOptional()
   @IsString()
-  observacoes?: string;
-
-  @IsOptional()
-  @IsString()
-  validade?: string;
-
-  @IsOptional()
-  @IsString()
-  visitorCompany?: string;
-
-  @IsOptional()
-  @IsString()
-  visitedCompanyName?: string;
-
-  @IsOptional()
-  @IsString()
   shelfLifeDate?: string;
 
   @IsOptional()
@@ -46,27 +56,29 @@ export class CreateVisitorDto {
   shelfLifeTime?: string;
 
   @IsOptional()
-  @IsString()
-  matricula?: string;
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  selectedGroups?: number[];
 
-  @IsOptional()
-  @IsString()
-  comments: string;
-
-  @IsOptional()
-  @IsString()
-  rg?: string;
-
-  @IsOptional()
-  @IsString()
-  cpf?: string;
-
-  @IsOptional()
-  @IsString()
-  telefone?: string;
+  @Type(() => Number)
+  @IsInt({ message: 'terminalId deve ser um número inteiro' })
+  terminalId: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  terminalId: number;
+  departmentId?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  userIdIdface?: number;
+
+  // ID da empresa que será visitada, se aplicável
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  visitedCompanyId?: number;
 }

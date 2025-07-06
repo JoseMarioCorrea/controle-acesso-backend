@@ -52,4 +52,9 @@ export class Visitante {
   terminalId: number;
   @ManyToMany(() => Department, (d) => d.visitantes)
   departmento: Department[];
+  foto: string;
+  // src/visitors/visitor.entity.ts
+  @Column({ type: 'int', unsigned: true })
+  userIdIdface!: number;
+
 }

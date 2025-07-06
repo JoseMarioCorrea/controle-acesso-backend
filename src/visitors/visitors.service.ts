@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IdfaceService } from 'src/devices/idface.service';
 import { Repository } from 'typeorm';
@@ -14,34 +14,23 @@ export class VisitorsService {
     private readonly idface: IdfaceService,
   ) {}
 
-  async create(dto: CreateVisitorDto): Promise<Visitante> {
-    console.log('DTO recebido:', dto);
+  async create(dto: CreateVisitorDto, filename?: string): Promise<Visitante> {
+    // valida terminalId apenas se não vier
+    if (dto.terminalId == null) {
+      throw new BadRequestException('terminalId é obrigatório');
+    }
 
-    const { ...rest } = dto;
-    const visitante = this.visitorRepo.create(rest);
+    const visitante = this.visitorRepo.create({
+      ...dto,
+      foto: filename,
+    });
     const saved = await this.visitorRepo.save(visitante);
-    console.log('Visitante salvo:', saved);
 
-    if (!dto.terminalId) throw new Error('terminalId é obrigatório');
-
-    // Certifique-se de que 'saved' é um objeto, não um array
-    if (Array.isArray(saved)) {
-      throw new Error(
-        'Erro interno: múltiplos visitantes salvos, esperado apenas um.',
-      );
-    }
-
-    if (!dto.nome?.trim()) {
-      throw new Error(
-        'Nome do visitante é obrigatório para o cadastro no iDFace',
-      );
-    }
-
+    // push pro iDFace
     await this.idface.login(dto.terminalId, 'admin', 'admin');
     await this.idface.createUserOnDevice(
       dto.terminalId,
       dto.nome,
-      dto.matricula,
     );
 
     return saved;
@@ -51,43 +40,33 @@ export class VisitorsService {
     return this.visitorRepo.find();
   }
 
-  async remove(id: number, terminalId: number): Promise<void> {
-    const visitante = await this.visitorRepo.findOne({ where: { id } });
-    if (!visitante) throw new NotFoundException('Visitante não encontrado');
-
-    await this.visitorRepo.remove(visitante);
-
-    await this.idface.login(terminalId, 'admin', 'admin');
-    await this.idface.deleteUserFromDevice(terminalId, id);
-  }
-
   async findById(id: number): Promise<Visitante> {
     return this.visitorRepo.findOneOrFail({ where: { id } });
   }
 
-  async update(id: number, dto: UpdateVisitorDto): Promise<Visitante> {
+  async update(
+    id: number,
+    dto: UpdateVisitorDto,
+    filename?: string,
+  ): Promise<Visitante> {
     const visitante = await this.visitorRepo.findOne({ where: { id } });
-    if (!visitante) {
-      throw new NotFoundException('Visitante não encontrado');
-    }
+    if (!visitante) throw new NotFoundException('Visitante não encontrado');
 
-    const { terminalId, shelfLifeDate, shelfLifeTime, ...rest } = dto;
-    Object.assign(visitante, rest as Partial<Visitante>);
-    const updated = await this.visitorRepo.save(visitante);
+    Object.assign(visitante, dto);
+    if (filename) visitante.foto = filename;
+    await this.visitorRepo.save(visitante);
 
-    if (terminalId) {
-      await this.idface.login(terminalId, 'admin', 'admin');
-      // Ajusta validade no iDFace
-      const endTimestamp = Math.floor(
-        new Date(`${shelfLifeDate}T${shelfLifeTime}`).getTime() / 1000,
-      );
-      await this.idface.modifyObjects(terminalId, {
-        object: 'users',
-        values: { begin_time: 0, end_time: endTimestamp },
-        where: { users: { id: updated.id } },
-      });
-    }
+    // recarrega com a URL da foto
+    return this.visitorRepo.findOneOrFail({ where: { id } });
+  }
 
-    return updated;
+  async remove(id: number, terminalId: number): Promise<void> {
+    const visitante = await this.visitorRepo.findOne({ where: { id } });
+    if (!visitante) throw new NotFoundException('Visitante não encontrado');
+    await this.visitorRepo.remove(visitante);
+    await this.idface.login(terminalId, 'admin', 'admin');
+    await this.idface.deleteUserFromDevice(terminalId, id);
   }
 }
+// This service handles the business logic for managing visitors.
+// It provides methods to create, retrieve, update, and delete visitor records,     

@@ -8,14 +8,16 @@ import { Pessoa } from '../pessoa/pessoa.entity';
 import { PessoaModule } from '../pessoa/pessoa.module';
 import { IdfaceModule } from 'src/devices/idface.module';
 import { Department } from '../departments/department.entity';
+import { VisitorPhotoController } from './visitorPhoto.controller';
+import { VisitorPhotoService } from './visitorPhoto.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Visitante, Pessoa, Department]),
     IdfaceModule, // caso use o service de pessoas
   ],
-  controllers: [VisitorsController],
-  providers: [VisitorsService],
+  controllers: [VisitorsController, VisitorPhotoController],
+  providers: [VisitorsService, VisitorPhotoService],
   exports: [VisitorsService], // se outro módulo precisar
 })
 export class VisitorModule {}
