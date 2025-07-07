@@ -35,7 +35,7 @@ export class Grupo {
    * O @JoinTable fica apenas de um lado (Grupo),
    * criando a tabela de junção `pessoa_grupos`.
    */
-  @ManyToMany(() => Pessoa, (pessoa) => pessoa.grupos)
+  @ManyToMany(() => Pessoa, (pessoa) => pessoa.selectedGroups)
   @JoinTable({
     name: 'pessoa_grupos',
     joinColumn: { name: 'grupo_id', referencedColumnName: 'id' },

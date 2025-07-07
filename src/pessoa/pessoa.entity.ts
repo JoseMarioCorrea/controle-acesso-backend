@@ -62,7 +62,7 @@ export class Pessoa {
   creditos: number;
 
   @ManyToMany(() => Grupo, (grupo) => grupo.pessoas, { cascade: true })
-  grupos: Grupo[];
+  selectedGroups: Grupo[];
 
   @Column({ nullable: true })
   idfaceId: number; // ID no equipamento iDFace
@@ -73,4 +73,5 @@ export class Pessoa {
 
   @Column({ type: 'int', nullable: true }) // ✅ CORRETO!
   terminalId: number;
+  fotos: string[];
 }

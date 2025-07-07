@@ -29,6 +29,11 @@ export class CreatePessoaDto {
   userIdIdface?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  departmentId?: number;
+
+  @IsOptional()
   @IsString()
   rg?: string;
 
@@ -60,6 +65,21 @@ export class CreatePessoaDto {
   @IsString()
   observacoes?: string;
 
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  selectedGroups?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Type(() => Number)
+  grupos?: number[];
+
+
   // Aplicamos @Type(() => Boolean) para converter "true" → true
   @IsOptional()
   @Type(() => Boolean)
@@ -75,13 +95,6 @@ export class CreatePessoaDto {
   @Type(() => Boolean)
   @IsBoolean()
   listaExcecao?: boolean;
-
-  @IsOptional()
-  @IsArray()
-  @ArrayNotEmpty()
-  @ArrayUnique()
-  @IsInt({ each: true })
-  grupos?: number[];
 
   @IsOptional()
   @Type(() => Boolean)
