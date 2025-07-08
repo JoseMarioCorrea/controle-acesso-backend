@@ -3,15 +3,12 @@ import {
   IsNotEmpty,
   IsOptional,
   IsBoolean,
-  IsNumber,
   IsString,
   IsArray,
   ArrayUnique,
   IsInt,
-  ArrayNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { Column } from 'typeorm';
 
 export class CreatePessoaDto {
   @IsNotEmpty()
@@ -22,10 +19,9 @@ export class CreatePessoaDto {
   @IsString()
   matricula?: string;
 
-  // Este campo virá do front para criar o usuário no iDFace
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   userIdIdface?: number;
 
   @IsOptional()
@@ -65,22 +61,14 @@ export class CreatePessoaDto {
   @IsString()
   observacoes?: string;
 
+  /** IDs dos grupos (ManyToMany) */
   @IsOptional()
   @IsArray()
   @ArrayUnique()
-  @IsInt({ each: true })
   @Type(() => Number)
-  selectedGroups?: number[];
-
-  @IsOptional()
-  @IsArray()
-  @ArrayUnique()
   @IsInt({ each: true })
-  @Type(() => Number)
   grupos?: number[];
 
-
-  // Aplicamos @Type(() => Boolean) para converter "true" → true
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()

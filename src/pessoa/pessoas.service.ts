@@ -1,3 +1,4 @@
+// src/pessoa/pessoas.service.ts
 import {
   Injectable,
   NotFoundException,
@@ -14,7 +15,13 @@ import { UpdatePessoaDto } from './dto/updatePessoa.dto';
 import { Grupo } from '../groups/grupo.entity';
 import { IdfaceService } from '../devices/idface.service';
 import { join } from 'path';
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  copyFileSync,
+  readdirSync,
+} from 'fs';
 
 @Injectable()
 export class PessoasService {
@@ -37,16 +44,20 @@ export class PessoasService {
     foto?: Express.Multer.File,
   ): Promise<Pessoa> {
     const { grupos, ...rest } = dto;
-    const pessoa = this.repo.create();
 
+    // 1) Atribui todos os campos obrigatórios de rest (nome, matricula, rg, etc)
+    const pessoa = this.repo.create(rest);
+
+    // 2) Se vier lista de grupos, faz o findByIds na propriedade correta `selectedGroups`
     if (grupos?.length) {
       pessoa.selectedGroups = await this.grupoRepo.findByIds(grupos);
     }
 
+    // 3) Persiste no banco
     const saved = await this.repo.save(pessoa);
     this.logger.log(`✔ Pessoa criada no DB com id=${saved.id}`);
 
-    // envia para iDFace
+    // 4) Envia para iDFace, se necessário
     try {
       const termId = dto.terminalId;
       if (typeof termId !== 'number') {
@@ -61,22 +72,25 @@ export class PessoasService {
         this.logger.log(`✔ Pessoa ${saved.id} criada no iDFace`);
       }
     } catch (err) {
-      this.logger.error(`❌ Erro criando pessoa ${saved.id} no iDFace`, err);
+      this.logger.error(
+        `❌ Erro criando pessoa ${saved.id} no iDFace`,
+        err,
+      );
     }
 
     return saved;
   }
 
-  /** Lista todas as pessoas */
+  /** Lista todas as pessoas, já trazendo os grupos */
   async findAll(): Promise<Pessoa[]> {
-    return this.repo.find({ relations: ['grupos'] });
+    return this.repo.find({ relations: ['selectedGroups'] });
   }
 
-  /** Busca pessoa por ID */
+  /** Busca pessoa por ID, já trazendo os grupos */
   async findById(id: number): Promise<Pessoa> {
     return this.repo.findOneOrFail({
       where: { id },
-      relations: ['grupos'],
+      relations: ['selectedGroups'],
     });
   }
 
@@ -86,12 +100,15 @@ export class PessoasService {
     dto: UpdatePessoaDto,
     foto?: Express.Multer.File,
   ): Promise<Pessoa> {
-    const { selectedGroups, ...rest } = dto;
+    const { grupos, ...rest } = dto;
+
+    // preload já atribui rest (nome, matricula...) e carrega a entidade
     const pessoa = await this.repo.preload({ id, ...rest });
     if (!pessoa) throw new NotFoundException('Pessoa não encontrada');
 
-    if (selectedGroups) {
-      pessoa.selectedGroups = await this.grupoRepo.findByIds(selectedGroups);
+    // se vier selectedGroups no DTO, faz o findByIds e atribui
+    if (grupos) {
+      pessoa.selectedGroups = await this.grupoRepo.findByIds(grupos);
     }
 
     const saved = await this.repo.save(pessoa);
@@ -106,7 +123,10 @@ export class PessoasService {
       );
       this.logger.log(`✔ Pessoa ${id} reconfigurada no iDFace`);
     } catch (err) {
-      this.logger.error(`❌ Falha ao reconfigurar pessoa ${id}`, err);
+      this.logger.error(
+        `❌ Falha ao reconfigurar pessoa ${id} no iDFace`,
+        err,
+      );
     }
 
     return saved;
@@ -127,7 +147,10 @@ export class PessoasService {
       await this.idface.deleteUserFromDevice(terminalId, id);
       this.logger.log(`✔ Pessoa ${id} removida do iDFace`);
     } catch (err) {
-      this.logger.error(`❌ Erro ao remover pessoa ${id} do iDFace`, err);
+      this.logger.error(
+        `❌ Erro ao remover pessoa ${id} do iDFace`,
+        err,
+      );
     }
   }
 
