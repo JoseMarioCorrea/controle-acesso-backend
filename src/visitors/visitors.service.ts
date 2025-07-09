@@ -94,6 +94,6 @@ export class VisitorsService {
 
     await this.visitorRepo.remove(visitante);
     await this.idface.login(terminalId, 'admin', 'admin');
-    await this.idface.deleteUserFromDevice(terminalId, id);
+    await this.idface.deleteUserFromDevice(terminalId, visitante.userIdIdface);
   }
 }

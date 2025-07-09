@@ -1,6 +1,6 @@
 // src/shared/storage/visitor-photo.service.ts
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { promises as fs } from 'fs';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { copyFileSync, existsSync, promises as fs, mkdirSync, writeFileSync } from 'fs';
 import * as path from 'path';
 import { v4 as uuid } from 'uuid';
 
@@ -30,22 +30,20 @@ export class VisitorPhotoService {
         file: Express.Multer.File,
     ): Promise<string> {
         // 1) garante pasta
-        const dir = path.join(this.baseDir, String(visitorId));
-        await fs.mkdir(dir, { recursive: true });
+        const baseDir = process.cwd();
+        const dir = path.join(baseDir, 'uploads', 'visitors', String(visitorId));
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+        const filename = `${Date.now()}-${file.originalname}`;
+        const dest = path.join(dir, filename);
 
         // 2) gera nome + caminho final
-        const ext = path.extname(file.originalname) || '.jpg';
-        const filename = `${Date.now()}-${uuid()}${ext}`;
-        const finalPath = path.join(dir, filename);
-
-        // 3) grava: ou do buffer (se usar memoryStorage) ou do diskStorage
-        if (file.buffer && file.buffer.length) {
-            await fs.writeFile(finalPath, file.buffer);
-        } else if ('path' in file && file.path) {
-            // multer gravou em disco antes, copia do temp pra nosso uploads
-            await fs.copyFile(file.path, finalPath);
+        if (file.buffer) {
+            writeFileSync(dest, file.buffer);
+        } else if (file.path) {
+            copyFileSync(file.path, dest);
         } else {
-            throw new InternalServerErrorException('Nenhum dado de arquivo recebido');
+            throw new BadRequestException('Arquivo de foto inválido');
         }
 
         // 4) devolve a URL pública

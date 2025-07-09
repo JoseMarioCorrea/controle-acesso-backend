@@ -65,10 +65,10 @@ export class VisitorsController {
     return this.visitorsService.update(id, payload, foto);
   }
 
-  @Delete(':id')
+  @Delete(':id/:terminalId')
   remove(
     @Param('id', ParseIntPipe) id: number,
-    @Query('terminalId', ParseIntPipe) terminalId: number,
+    @Param('terminalId', ParseIntPipe) terminalId: number,
   ) {
     return this.visitorsService.remove(id, terminalId);
   }
