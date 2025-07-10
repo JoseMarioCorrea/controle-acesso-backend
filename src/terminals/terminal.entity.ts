@@ -19,6 +19,10 @@ export class Terminal {
   @Column()
   model: string;
 
+  // marca este terminal como ativo/inativo
+  @Column({ default: true })
+  active: boolean;
+
   // ligação inversa: um terminal para muitos departamentos
   @OneToMany(() => Department, (dept) => dept.terminal)
   departments: Department[];
