@@ -14,7 +14,7 @@ import { CreatePessoaDto } from './dto/createPessoa.dto';
 import { UpdatePessoaDto } from './dto/updatePessoa.dto';
 import { Grupo } from '../groups/grupo.entity';
 import { IdfaceService } from '../devices/idface.service';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import {
   existsSync,
   mkdirSync,
@@ -22,6 +22,13 @@ import {
   copyFileSync,
   readdirSync,
 } from 'fs';
+
+function getBaseDir() {
+  const runningInPkg = typeof (process as any).pkg !== 'undefined';
+  return runningInPkg ? dirname(process.execPath) : join(__dirname, '..');
+}
+const baseDir = getBaseDir();
+// This function determines the base directory for file operations
 
 @Injectable()
 export class PessoasService {
@@ -34,59 +41,39 @@ export class PessoasService {
     private readonly grupoRepo: Repository<Grupo>,
     @Inject(forwardRef(() => IdfaceService))
     private readonly idface: IdfaceService,
-  ) {}
+  ) { }
 
-  /**
-   * Cria nova pessoa (sem foto física) e libera no iDFace
-   */
-  async create(
-    dto: CreatePessoaDto,
-    foto?: Express.Multer.File,
-  ): Promise<Pessoa> {
+  async create(dto: CreatePessoaDto, foto?: Express.Multer.File): Promise<Pessoa> {
     const { grupos, ...rest } = dto;
-
-    // 1) Atribui todos os campos obrigatórios de rest (nome, matricula, rg, etc)
     const pessoa = this.repo.create(rest);
 
-    // 2) Se vier lista de grupos, faz o findByIds na propriedade correta `selectedGroups`
     if (grupos?.length) {
       pessoa.selectedGroups = await this.grupoRepo.findByIds(grupos);
     }
 
-    // 3) Persiste no banco
     const saved = await this.repo.save(pessoa);
     this.logger.log(`✔ Pessoa criada no DB com id=${saved.id}`);
 
-    // 4) Envia para iDFace, se necessário
     try {
       const termId = dto.terminalId;
       if (typeof termId !== 'number') {
         throw new BadRequestException('terminalId é obrigatório');
       }
       if (!saved.inativo) {
-        await this.idface.createUserOnDevice(
-          termId,
-          saved.nome,
-          saved.registro,
-        );
+        await this.idface.createUserOnDevice(termId, saved.nome, saved.registro);
         this.logger.log(`✔ Pessoa ${saved.id} criada no iDFace`);
       }
     } catch (err) {
-      this.logger.error(
-        `❌ Erro criando pessoa ${saved.id} no iDFace`,
-        err,
-      );
+      this.logger.error(`❌ Erro criando pessoa ${saved.id} no iDFace`, err);
     }
 
     return saved;
   }
 
-  /** Lista todas as pessoas, já trazendo os grupos */
   async findAll(): Promise<Pessoa[]> {
     return this.repo.find({ relations: ['selectedGroups'] });
   }
 
-  /** Busca pessoa por ID, já trazendo os grupos */
   async findById(id: number): Promise<Pessoa> {
     return this.repo.findOneOrFail({
       where: { id },
@@ -94,19 +81,11 @@ export class PessoasService {
     });
   }
 
-  /** Atualiza dados de pessoa e reconfigura no iDFace */
-  async update(
-    id: number,
-    dto: UpdatePessoaDto,
-    foto?: Express.Multer.File,
-  ): Promise<Pessoa> {
+  async update(id: number, dto: UpdatePessoaDto, foto?: Express.Multer.File): Promise<Pessoa> {
     const { grupos, ...rest } = dto;
-
-    // preload já atribui rest (nome, matricula...) e carrega a entidade
     const pessoa = await this.repo.preload({ id, ...rest });
     if (!pessoa) throw new NotFoundException('Pessoa não encontrada');
 
-    // se vier selectedGroups no DTO, faz o findByIds e atribui
     if (grupos) {
       pessoa.selectedGroups = await this.grupoRepo.findByIds(grupos);
     }
@@ -114,7 +93,6 @@ export class PessoasService {
     const saved = await this.repo.save(pessoa);
     this.logger.log(`✔ Pessoa ${id} atualizada no DB`);
 
-    // reconfigura no iDFace
     try {
       await this.idface.updateUserOnDevice(
         dto.terminalId,
@@ -123,16 +101,12 @@ export class PessoasService {
       );
       this.logger.log(`✔ Pessoa ${id} reconfigurada no iDFace`);
     } catch (err) {
-      this.logger.error(
-        `❌ Falha ao reconfigurar pessoa ${id} no iDFace`,
-        err,
-      );
+      this.logger.error(`❌ Falha ao reconfigurar pessoa ${id} no iDFace`, err);
     }
 
     return saved;
   }
 
-  /** Remove pessoa do DB e do iDFace */
   async remove(id: number, terminalId: number): Promise<void> {
     const pessoa = await this.repo.findOne({ where: { id } });
     if (!pessoa) {
@@ -147,21 +121,15 @@ export class PessoasService {
       await this.idface.deleteUserFromDevice(terminalId, id);
       this.logger.log(`✔ Pessoa ${id} removida do iDFace`);
     } catch (err) {
-      this.logger.error(
-        `❌ Erro ao remover pessoa ${id} do iDFace`,
-        err,
-      );
+      this.logger.error(`❌ Erro ao remover pessoa ${id} do iDFace`, err);
     }
   }
 
-  /**
-   * Grava o arquivo de foto em uploads/pessoas/:userId (fallback buffer e path) e retorna o path público
-   */
-  async savePhoto(
+ async savePhoto(
     userId: number,
     file: Express.Multer.File,
   ): Promise<string> {
-    const baseDir = process.cwd();
+    const baseDir = getBaseDir();
     const dir = join(baseDir, 'uploads', 'pessoas', String(userId));
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
@@ -180,14 +148,13 @@ export class PessoasService {
     return `/uploads/pessoas/${userId}/${filename}`;
   }
 
-  /** Lista todas as fotos de um usuário */
   async listPhotos(userId: number): Promise<string[]> {
-    const dir = join(process.cwd(), 'uploads', 'pessoas', String(userId));
+    const baseDir = getBaseDir();
+    const dir = join(baseDir, 'uploads', 'pessoas', String(userId));
     if (!existsSync(dir)) return [];
     return readdirSync(dir).map(f => `/uploads/pessoas/${userId}/${f}`);
   }
 
-  /** Retorna a foto mais recente, baseado em ordenação pelo nome */
   async getLatestPhoto(userId: number): Promise<string> {
     const paths = await this.listPhotos(userId);
     if (!paths.length) return '';
