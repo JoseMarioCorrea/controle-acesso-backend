@@ -13,8 +13,8 @@ export class Device {
   @Column({ length: 45 })
   ip: string;
 
-  @Column({ length: 45 })
-  port: string;
+  @Column('int')
+  port: number;
   
   @ManyToOne(() => Departament, dept => dept.devices, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'departmentId' })

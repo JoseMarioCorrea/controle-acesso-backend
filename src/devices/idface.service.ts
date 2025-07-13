@@ -4,6 +4,8 @@ import { HttpService } from '@nestjs/axios';
 import { Device } from 'src/devices/idaface.entity';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { CreateDeviceDto } from './dto/createDevice.dto';
+import { UpdateDeviceDto } from './dto/updateDevice.dto';
 
 @Injectable()
 export class IdfaceService {
@@ -14,7 +16,7 @@ export class IdfaceService {
     private readonly httpService: HttpService,
     @InjectRepository(Device)
     private readonly deviceRepo: Repository<Device>,
-  ) {}
+  ) { }
 
   /**
    * Retorna instância HTTP configurada para o device
@@ -24,6 +26,55 @@ export class IdfaceService {
     if (!device) throw new NotFoundException(`Device ${deviceId} não encontrado`);
     const baseURL = `http://${device.ip}:${device.port}`;
     return this.httpService.axiosRef.create({ baseURL, timeout: 5000 });
+  }
+
+  /**
+   * Salva um novo device (nome, modelo, ip, porta) em base.
+   */
+  async createDevice(dto: CreateDeviceDto): Promise<Device> {
+    const device = this.deviceRepo.create(dto);
+    const saved = await this.deviceRepo.save(device);
+    this.logger.log(`✔ Device criado em DB id=${saved.id}`);
+    return saved;
+  }
+
+  /**
+   * Lista todos os devices cadastrados.
+   */
+  async listDevices(): Promise<Device[]> {
+    return this.deviceRepo.find();
+  }
+
+  /**
+   * Busca um device pelo ID.
+   */
+  async getDevice(deviceId: number): Promise<Device> {
+    const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
+    if (!device) throw new NotFoundException(`Device ${deviceId} não encontrado`);
+    return device;
+  }
+
+  /**
+   * Atualiza os dados do device em base.
+   */
+  async updateDevice(
+    deviceId: number,
+    dto: UpdateDeviceDto
+  ): Promise<Device> {
+    const device = await this.getDevice(deviceId);
+    Object.assign(device, dto);
+    const saved = await this.deviceRepo.save(device);
+    this.logger.log(`✔ Device ${deviceId} atualizado em DB`);
+    return saved;
+  }
+
+  /**
+   * Remove (delete) o device da base.
+   */
+  async deleteDevice(deviceId: number): Promise<void> {
+    const device = await this.getDevice(deviceId);
+    await this.deviceRepo.remove(device);
+    this.logger.log(`✔ Device ${deviceId} removido do DB`);
   }
 
   /**

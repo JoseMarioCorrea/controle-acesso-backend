@@ -22,7 +22,7 @@ async function bootstrap() {
   // 3) garante pasta data + copia seed se necessário
   const dataDir = join(baseDir, 'data');
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
-  const dbFile   = join(dataDir, 'controle_acesso.sqlite');
+  const dbFile = join(dataDir, 'controle_acesso.sqlite');
   const seedFile = join(dataDir, 'seed.sqlite');
   if (!existsSync(dbFile) && existsSync(seedFile)) {
     copyFileSync(seedFile, dbFile);
@@ -37,7 +37,7 @@ async function bootstrap() {
     cors({
       origin: true,
       credentials: true,
-      methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }),
   );
 
@@ -52,8 +52,12 @@ async function bootstrap() {
   // 8) validação global sem transformação de tipos
   app.useGlobalPipes(
     new ValidationPipe({
-      transform: false,    // desativa transform para não disparar numeric-string errors
       whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,            // <-- isso faz string "1" virar number 1
+      transformOptions: {
+        enableImplicitConversion: true,
+      }
     }),
   );
 

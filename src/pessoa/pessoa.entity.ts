@@ -12,47 +12,60 @@ import {
 import { Grupo } from '../groups/grupo.entity';
 import { Departament } from '../departments/department.entity';
 
- @Entity('pessoa')
- export class Pessoa {
-   @PrimaryGeneratedColumn('uuid')
-   id: string;
+export enum PersonState {
+  SALVO = 'SALVO',
+  PENDENTE_ENVIO = 'PENDENTE_ENVIO',
+  ENVIADO = 'ENVIADO',
+  INATIVO = 'INATIVO',
+  EXCLUIDO_DEVICE = 'EXCLUIDO_DEVICE',
+}
 
-   @Column()
-   nome: string;
+@Entity('pessoa')
+export class Pessoa {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-   @Column({ length: 100 })
-   documentType: '0' | '1';
+  @Column()
+  nome: string;
 
-   @Column({ nullable: true })
-   matricula?: string;
+  @Column({ nullable: true })
+  documentType?: string;
 
-   @Column({ nullable: true })
-   rg?: string;
+  @Column({ nullable: true })
+  matricula?: string;
 
-   @Column({ nullable: true })
-   cpf?: string;
+  @Column({ nullable: true })
+  rg?: string;
 
-   @Column({ nullable: true })
-   email?: string;
+  @Column({ nullable: true })
+  cpf?: string;
 
-   @Column({ nullable: true })
-   telefone?: string;
+  @Column({ nullable: true })
+  email?: string;
 
-   @Column({ nullable: true })
-   observacoes?: string;
+  @Column({ nullable: true })
+  telefone?: string;
 
-   @Column({ type: 'date', nullable: true })
-   shelfLifeDate?: Date;
+  @Column({ nullable: true })
+  observacoes?: string;
 
-   @Column({ nullable: true })
-   fotoFilename?: string;
+  @Column({ type: 'date', nullable: true })
+  shelfLifeDate?: Date;
+
+  @Column({ nullable: true })
+  fotoFilename?: string;
+
+  /** Estado no fluxo de sincronização */
+  @Column({
+    type: 'simple-enum',
+    enum: PersonState,
+    default: PersonState.SALVO,
+  })
+  state: PersonState;
 
   /** Vinculação ao departamento (pai dos devices) */
-  @Column()
-  departmentId: number;
-
-  @ManyToOne(() => Departament)
-  @JoinColumn({ name: 'department_id' })
+  @ManyToOne(() => Departament, { nullable: false })
+  @JoinColumn({ name: 'departmentId' })
   department: Departament;
 
   /** Grupos (ManyToMany) */
@@ -73,7 +86,4 @@ import { Departament } from '../departments/department.entity';
 
   @Column({ default: false })
   listaExcecao: boolean;
-
-  @Column({ default: false })
-  situacao: string; // 'ativo' | 'inativo' | 'pendente'
 }

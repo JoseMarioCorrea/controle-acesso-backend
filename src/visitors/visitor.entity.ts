@@ -5,8 +5,19 @@ import {
   Column,
   ManyToMany,
   JoinTable,
+  JoinColumn,
+  ManyToOne,
 } from 'typeorm';
 import { Grupo } from '../groups/grupo.entity';
+import { Departament } from 'src/departments/department.entity';
+
+export enum VisitorState {
+  SALVO = 'SALVO',
+  PENDENTE_ENVIO = 'PENDENTE_ENVIO',
+  ENVIADO = 'ENVIADO',
+  INATIVO = 'INATIVO',
+  EXCLUIDO_DEVICE = 'EXCLUIDO_DEVICE',
+}
 
 @Entity('visitantes')
 export class Visitante {
@@ -46,6 +57,14 @@ export class Visitante {
   @Column({ type: 'int', nullable: true })
   visitedCompanyId?: number;
 
+  /** Estado no fluxo de sincronização */
+  @Column({
+    type: 'simple-enum',
+    enum: VisitorState,
+    default: VisitorState.SALVO,
+  })
+  state: VisitorState;
+
   /**
    * Relação de grupos para controle de acesso assíncrono.
    */
@@ -62,4 +81,11 @@ export class Visitante {
    */
   @Column({ nullable: true })
   fotoFilename?: string;
+
+  @Column()
+  departmentId: number;
+
+  @ManyToOne(() => Departament)
+  @JoinColumn({ name: 'department_id' })
+  department: Departament;
 }

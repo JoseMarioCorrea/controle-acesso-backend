@@ -18,12 +18,44 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { IdfaceService } from './idface.service';
+import { CreateDeviceDto } from './dto/createDevice.dto';
+import { UpdateDeviceDto } from './dto/updateDevice.dto';
+import { Device } from './idaface.entity';
 
 @Controller('idface')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class IdfaceController {
-  constructor(private readonly idface: IdfaceService) {}
+  constructor(private readonly idface: IdfaceService) { }
 
+  @Post()
+  create(@Body() dto: CreateDeviceDto): Promise<Device> {
+    return this.idface.createDevice(dto);
+  }
+
+  @Get()
+  list(): Promise<Device[]> {
+    return this.idface.listDevices();
+  }
+
+  @Get(':id')
+  get(@Param('id', ParseIntPipe) id: number): Promise<Device> {
+    return this.idface.getDevice(id);
+  }
+
+  @Put(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateDeviceDto
+  ): Promise<Device> {
+    return this.idface.updateDevice(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.idface.deleteDevice(id);
+  }
+  
   /**
    * Cria vários usuários no device
    */
