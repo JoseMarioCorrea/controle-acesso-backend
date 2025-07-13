@@ -1,134 +1,142 @@
 // src/devices/idface.controller.ts
 import {
-  Controller, Post, Put, Delete, Body, Param, ParseIntPipe,
-  UsePipes, ValidationPipe,
+  Controller,
+  Post,
+  Put,
+  Delete,
   Get,
+  Param,
+  Body,
+  UsePipes,
+  ValidationPipe,
+  ParseIntPipe,
+  UseInterceptors,
   UploadedFile,
-  UseInterceptors
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import { IdfaceService } from './idface.service';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { IdfaceService } from './idface.service';
+import { CreateDeviceDto } from './dto/createDevice.dto';
+import { UpdateDeviceDto } from './dto/updateDevice.dto';
+import { Device } from './idaface.entity';
 
-@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @Controller('idface')
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class IdfaceController {
   constructor(private readonly idface: IdfaceService) { }
 
-  @Post('login/:terminalId')
-  login(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Body('login') login: string,
-    @Body('password') password: string
-  ) {
-    return this.idface.login(terminalId, login, password);
+  @Post()
+  create(@Body() dto: CreateDeviceDto): Promise<Device> {
+    return this.idface.createDevice(dto);
   }
 
-  @Post('logout/:terminalId')
-  logout(@Param('terminalId', ParseIntPipe) terminalId: number) {
-    return this.idface.logout(terminalId);
+  @Get()
+  list(): Promise<Device[]> {
+    return this.idface.listDevices();
   }
 
-  @Get('session/valid/:terminalId')
-  valid(@Param('terminalId', ParseIntPipe) terminalId: number) {
-    return this.idface.validateSession(terminalId);
+  @Get(':id')
+  get(@Param('id', ParseIntPipe) id: number): Promise<Device> {
+    return this.idface.getDevice(id);
   }
 
-  @Post('reboot/:terminalId')
-  reboot(@Param('terminalId', ParseIntPipe) terminalId: number) {
-    return this.idface.reboot(terminalId);
-  }
-
-  @Post('factory-reset/:terminalId')
-  factory(@Param('terminalId', ParseIntPipe) terminalId: number) {
-    return this.idface.factoryReset(terminalId);
-  }
-
-  @Post('time/:terminalId')
-  time(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Body('datetime') dt: string
-  ) {
-    return this.idface.setDateTime(terminalId, dt);
-  }
-
-  @Post('network/:terminalId')
-  network(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Body() cfg: any
-  ) {
-    return this.idface.configureNetwork(terminalId, cfg);
-  }
-
-  @Post('users/:terminalId')
-  async createUser(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Body('name') name: string,
-    @Body('registration') registration?: string,
-    @Body('password') password?: string,
-    @Body('salt') salt?: string,
-  ) {
-    const userId = await this.idface.createUserOnDevice(
-      terminalId,
-      name,
-      registration ?? '',
-      password ?? '',
-      salt ?? ''
-    );
-    return { userId };
-  }
-
-  @Put('users/:terminalId/:id')
-  updateUser(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
+  @Put(':id')
+  update(
     @Param('id', ParseIntPipe) id: number,
-    @Body() fields: Record<string, any>
-  ) {
-    return this.idface.updateUserOnDevice(terminalId, id, fields);
+    @Body() dto: UpdateDeviceDto
+  ): Promise<Device> {
+    return this.idface.updateDevice(id, dto);
   }
 
-  @Delete('users/:terminalId/:id')
-  deleteUser(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Param('id', ParseIntPipe) id: number
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.idface.deleteDevice(id);
+  }
+  
+  /**
+   * Cria vários usuários no device
+   */
+  @Post(':deviceId/users/batch')
+  createUsersBatch(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
+    @Body() users: Array<{ name: string; registration: string }>,
   ) {
-    return this.idface.deleteUserFromDevice(terminalId, id);
+    return this.idface.createUsersBatch(deviceId, users);
   }
 
-  @Get('users/:terminalId/:id')
-  getUser(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Param('id', ParseIntPipe) id: number
+  /**
+   * Atualiza vários usuários no device
+   */
+  @Put(':deviceId/users/batch')
+  updateUsersBatch(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
+    @Body() updates: Array<{ id: number; values: Record<string, any> }>,
   ) {
-    return this.idface.loadUserById(terminalId, id); // precisa criar esse método
+    return this.idface.updateUsersBatch(deviceId, updates);
   }
 
+  /**
+   * Carrega objetos do device
+   */
+  @Post(':deviceId/objects/load')
+  loadObjects(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
+    @Body('object') object: string,
+    @Body('where') where?: Record<string, any>,
+  ) {
+    return this.idface.loadObjects(deviceId, object, where);
+  }
 
-  @Get('users/:terminalId/confirm/:userId')
-  async confirmUserExists(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
+  /**
+   * Remove objetos do device
+   */
+  @Delete(':deviceId/objects')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  deleteObjects(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
+    @Body('object') object: string,
+    @Body('where') where: Record<string, any>,
+  ) {
+    return this.idface.deleteObjects(deviceId, object, where);
+  }
+
+  /**
+   * Upload de foto de usuário
+   */
+  @Post(':deviceId/users/:userId/photo')
+  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage() }))
+  @HttpCode(HttpStatus.NO_CONTENT)
+  uploadUserPhoto(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
+    @Param('userId', ParseIntPipe) userId: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.idface.uploadUserPhoto(deviceId, userId, file.buffer);
+  }
+
+  /**
+   * Teste de identificação facial
+   */
+  @Post(':deviceId/users/photo/test')
+  @UseInterceptors(FileInterceptor('image', { storage: memoryStorage() }))
+  testUserImage(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.idface.testUserImage(deviceId, file.buffer);
+  }
+
+  /**
+   * Libera acesso para usuário no device
+   */
+  @Post(':deviceId/users/:userId/access')
+  liberarAcesso(
+    @Param('deviceId', ParseIntPipe) deviceId: number,
     @Param('userId', ParseIntPipe) userId: number,
   ) {
-    const exists = await this.idface.confirmUserExists(terminalId, userId);
-    return { exists };
-  }
-
-
-  @Post('foto/:terminalId')
-  @UseInterceptors(FileInterceptor('foto'))
-  uploadFoto(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @UploadedFile() file: Express.Multer.File,
-    @Body('user_id', ParseIntPipe) userId: number
-  ) {
-    return this.idface.uploadUserPhoto(terminalId, file.buffer, userId);
-  }
-
-  @Post('users/:terminalId/:id/group/:groupId')
-  assignUserToGroup(
-    @Param('terminalId', ParseIntPipe) terminalId: number,
-    @Param('id', ParseIntPipe) userId: number,
-    @Param('groupId', ParseIntPipe) groupId: number
-  ) {
-    return this.idface.assignUserToGroup(terminalId, userId, groupId);
+    return this.idface.liberarAcesso(deviceId, userId);
   }
 }

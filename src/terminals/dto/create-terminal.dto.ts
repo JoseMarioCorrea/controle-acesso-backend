@@ -15,5 +15,4 @@ export class CreateTerminalDto {
 
   @IsString()
   model: string;
-  
 }

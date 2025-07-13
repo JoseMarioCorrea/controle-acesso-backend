@@ -1,9 +1,36 @@
-import { IsNotEmpty, IsString, IsOptional, IsNumber } from "class-validator";
+// src/visitors/dto/createVisitor.dto.ts
+import { Type } from 'class-transformer';
+import {
+  IsString,
+  IsOptional,
+  IsEmail,
+  IsArray,
+  ArrayUnique,
+  IsInt,
+  IsNotEmpty,
+} from 'class-validator';
 
 export class CreateVisitorDto {
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   nome: string;
+
+  @IsOptional()
+  @IsString()
+  documentType?: string;
+
+  @IsOptional()
+  @IsString()
+  idUsuario?: string;
+
+  @IsOptional()
+  @IsString()
+  rg?: string;
+
+  @IsOptional()
+  @IsString()
+  cpf?: string;
 
   @IsOptional()
   @IsString()
@@ -11,7 +38,15 @@ export class CreateVisitorDto {
 
   @IsOptional()
   @IsString()
-  visitedCompanyName?: string;
+  comments?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+
+  @IsOptional()
+  @IsEmail()
+  email?: string;
 
   @IsOptional()
   @IsString()
@@ -21,26 +56,17 @@ export class CreateVisitorDto {
   @IsString()
   shelfLifeTime?: string;
 
-  @IsOptional()
-  @IsString()
-  visitor_rg?: string;
+  /** IDs dos grupos aos quais esse visitante pertence */
+  @IsArray()
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @IsNotEmpty({ each: true })
+  selectedGroups: number[];
 
+  /** (Opcional) ID da empresa visitada */
   @IsOptional()
-  @IsString()
-  visitor_cpf?: string;
-
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
-  @IsOptional()
-  @IsString()
-  email?: string;
-
-  @IsOptional()
-  @IsString()
-  comments?: string;
-  @IsOptional()
-  @IsNumber()
-  terminalId?: number;
+  @Type(() => Number)
+  @IsInt()
+  visitedCompanyId?: number;
 }

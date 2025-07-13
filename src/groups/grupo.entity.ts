@@ -1,11 +1,16 @@
+// src/grupos/grupo.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
   ManyToMany,
+  ManyToOne,
+  JoinColumn,
   JoinTable,
 } from 'typeorm';
 import { Pessoa } from '../pessoa/pessoa.entity';
+import { Departament } from '../departments/department.entity';
+import { Visitante } from 'src/visitors/visitor.entity';
 
 @Entity('grupos')
 export class Grupo {
@@ -18,16 +23,17 @@ export class Grupo {
   @Column({ type: 'text', nullable: true })
   descricao?: string;
 
-  /**
-   * Relação ManyToMany com Pessoa.
-   * O @JoinTable fica apenas de um lado (Grupo),
-   * criando a tabela de junção `pessoa_grupos`.
-   */
+  /** aqui: cada grupo pertence a exatamente um departamento */
+  @ManyToOne(() => Departament, (dept) => dept.grupos, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'departmentId' })
+  department: Departament;
+
+  @Column()
+  departmentId: number;
+
   @ManyToMany(() => Pessoa, (pessoa) => pessoa.grupos)
-  @JoinTable({
-    name: 'pessoa_grupos',
-    joinColumn: { name: 'grupo_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'pessoa_id', referencedColumnName: 'id' },
-  })
   pessoas: Pessoa[];
+
+  @ManyToMany(() => Visitante, visitante => visitante.grupos)
+  visitantes: Visitante[];
 }

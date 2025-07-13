@@ -1,7 +1,21 @@
 // src/departments/dto/create-department.dto.ts
-import { IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsNotEmpty, IsNumber, IsOptional, IsArray, IsInt } from 'class-validator';
 
 export class CreateDepartmentDto {
-  @IsString()
+  @IsNotEmpty()
   nome: string;
+
+  @IsNotEmpty()
+  @Type(() => Number)
+  @IsInt({ message: 'deviceId deve ser um inteiro' })
+  deviceId: number;
+
+  @IsOptional()
+  @IsArray()
+  userIds?: number[];
+
+  @IsOptional()
+  @IsArray()
+  visitorIds?: number[];
 }

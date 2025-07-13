@@ -1,0 +1,236 @@
+{
+  "info": {
+    "name": "Controle Acesso API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type","value": "application/json"}],
+        "body": {"mode":"raw","raw":"{\n  \"nome\": \"admin\",\n  \"senha\": \"admin\"\n}"},
+        "url": {"raw":"http://localhost:3000/auth/login","host":["http://localhost:3000"],"path":["auth","login"]}
+      }
+    },
+    {
+      "name": "Departments - List All",
+      "request": {"method":"GET","url":{"raw":"http://localhost:3000/departments","host":["http://localhost:3000"],"path":["departments"]}}
+    },
+    {
+      "name": "Departments - Get by ID",
+      "request": {"method":"GET","url":{"raw":"http://localhost:3000/departments/1","host":["http://localhost:3000"],"path":["departments","1"]}}
+    },
+    {
+      "name": "Departments - Create",
+      "request": {
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"nome\": \"Teste Dept\",\n  \"deviceId\": 1,\n  \"userIds\": [1,2],\n  \"visitorIds\": [1]\n}"},
+        "url":{"raw":"http://localhost:3000/departments","host":["http://localhost:3000"],"path":["departments"]}
+      }
+    },
+    {
+      "name": "Departments - Update",
+      "request": {
+        "method":"PUT",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"nome\": \"Dept Updated\"\n}"},
+        "url":{"raw":"http://localhost:3000/departments/1","host":["http://localhost:3000"],"path":["departments","1"]}
+      }
+    },
+    {
+      "name": "Departments - Delete",
+      "request": {"method":"DELETE","url":{"raw":"http://localhost:3000/departments/1","host":["http://localhost:3000"],"path":["departments","1"]}}
+    },
+    {
+      "name": "Departments - Get Groups by Department",
+      "request": {"method":"GET","url":{"raw":"http://localhost:3000/departments/1/groups","host":["http://localhost:3000"],"path":["departments","1","groups"]}}
+    },
+    {
+      "name": "IDFace - Create Users Batch",
+      "request": {
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"[\n  {\"name\":\"User A\",\"registration\":\"1001\"},\n  {\"name\":\"User B\",\"registration\":\"1002\"}\n]"},
+        "url":{"raw":"http://localhost:3000/idface/1/users/batch","host":["http://localhost:3000"],"path":["idface","1","users","batch"]}
+      }
+    },
+    {
+      "name": "IDFace - Update Users Batch",
+      "request": {
+        "method":"PUT",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"[\n  {\"id\":1001,\"values\":{\"name\":\"User A Updated\"}},\n  {\"id\":1002,\"values\":{\"name\":\"User B Updated\"}}\n]"},
+        "url":{"raw":"http://localhost:3000/idface/1/users/batch","host":["http://localhost:3000"],"path":["idface","1","users","batch"]}
+      }
+    },
+    {
+      "name": "IDFace - Load Objects",
+      "request": {
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"object\":\"users\",\n  \"where\":{\"users\":{\"id\":1001}}\n}"},
+        "url":{"raw":"http://localhost:3000/idface/1/objects/load","host":["http://localhost:3000"],"path":["idface","1","objects","load"]}
+      }
+    },
+    {
+      "name": "IDFace - Delete Objects",
+      "request": {
+        "method":"DELETE",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"object\":\"users\",\n  \"where\":{\"users\":{\"id\":1001}}\n}"},
+        "url":{"raw":"http://localhost:3000/idface/1/objects","host":["http://localhost:3000"],"path":["idface","1","objects"]}
+      }
+    },
+    {
+      "name": "IDFace - Upload User Photo",
+      "request": {
+        "method":"POST",
+        "body":{"mode":"formdata","formdata":[{"key":"image","type":"file","src":""}]},
+        "url":{"raw":"http://localhost:3000/idface/1/users/1001/photo","host":["http://localhost:3000"],"path":["idface","1","users","1001","photo"]}
+      }
+    },
+    {
+      "name": "IDFace - Test User Image",
+      "request": {
+        "method":"POST",
+        "body":{"mode":"formdata","formdata":[{"key":"image","type":"file","src":""}]},
+        "url":{"raw":"http://localhost:3000/idface/1/users/photo/test","host":["http://localhost:3000"],"path":["idface","1","users","photo","test"]}
+      }
+    },
+    {
+      "name": "IDFace - Liberar Acesso",
+      "request": {
+        "method":"POST",
+        "url":{"raw":"http://localhost:3000/idface/1/users/1001/access","host":["http://localhost:3000"],"path":["idface","1","users","1001","access"]}
+      }
+    },
+    {
+      "name": "Pessoas - Create",
+      "request": {
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"multipart/form-data"}],
+        "body":{"mode":"formdata","formdata":[{"key":"foto","type":"file","src":""},{"key":"nome","value":"Zé","type":"text"},{"key":"departmentId","value":"1","type":"text"},{"key":"grupos","value":"[1,2]","type":"text"}]},
+        "url":{"raw":"http://localhost:3000/pessoas","host":["http://localhost:3000"],"path":["pessoas"]}
+      }
+    },
+    {
+      "name": "Pessoas - List All",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/pessoas","host":["http://localhost:3000"],"path":["pessoas"]}}
+    },
+    {
+      "name": "Pessoas - Get by ID",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/pessoas/{{uuid}}","host":["http://localhost:3000"],"path":["pessoas","{{uuid}}"]}}
+    },
+    {
+      "name": "Pessoas - Update",
+      "request":{
+        "method":"PUT",
+        "header":[{"key":"Content-Type","value":"multipart/form-data"}],
+        "body":{"mode":"formdata","formdata":[{"key":"foto","type":"file","src":""},{"key":"nome","value":"Zé Alterado","type":"text"}]},
+        "url":{"raw":"http://localhost:3000/pessoas/{{uuid}}","host":["http://localhost:3000"],"path":["pessoas","{{uuid}}"]}
+      }
+    },
+    {
+      "name": "Pessoas - Delete",
+      "request":{"method":"DELETE","url":{"raw":"http://localhost:3000/pessoas/{{uuid}}","host":["http://localhost:3000"],"path":["pessoas","{{uuid}}"]}}
+    },
+    {
+      "name": "Pessoas - Upload Photo",
+      "request":{
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"multipart/form-data"}],
+        "body":{"mode":"formdata","formdata":[{"key":"foto","type":"file","src":""}]},
+        "url":{"raw":"http://localhost:3000/pessoas/{{uuid}}/fotos","host":["http://localhost:3000"],"path":["pessoas","{{uuid}}","fotos"]}
+      }
+    },
+    {
+      "name": "Pessoas - List Photos",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/pessoas/{{uuid}}/fotos","host":["http://localhost:3000"],"path":["pessoas","{{uuid}}","fotos"]}}
+    },
+    {
+      "name": "Pessoas - Latest Photo",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/pessoas/{{uuid}}/fotos/latest","host":["http://localhost:3000"],"path":["pessoas","{{uuid}}","fotos","latest"]}}
+    },
+    {
+      "name": "Terminals - Create",
+      "request":{
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"host\": \"192.168.0.10\",\n  \"port\": 80\n}"},
+        "url":{"raw":"http://localhost:3000/idface/terminals","host":["http://localhost:3000"],"path":["idface","terminals"]}
+      }
+    },
+    {
+      "name": "Terminals - List All",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/idface/terminals","host":["http://localhost:3000"],"path":["idface","terminals"]}}
+    },
+    {
+      "name": "Terminals - Get by ID",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/idface/terminals/1","host":["http://localhost:3000"],"path":["idface","terminals","1"]}}
+    },
+    {
+      "name": "Terminals - Update",
+      "request":{
+        "method":"PUT",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"host\": \"192.168.0.20\"\n}"},
+        "url":{"raw":"http://localhost:3000/idface/terminals/1","host":["http://localhost:3000"],"path":["idface","terminals","1"]}
+      }
+    },
+    {
+      "name": "Terminals - Delete",
+      "request":{
+        "method":"DELETE",
+        "url":{"raw":"http://localhost:3000/idface/terminals/1","host":["http://localhost:3000"],"path":["idface","terminals","1"]}
+      }
+    },
+    {
+      "name": "Visitors - Create",
+      "request":{
+        "method":"POST",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"nome\": \"Visitante\",\n  \"selectedGroups\": [1,2],\n  \"visitedCompanyId\": 1\n}"},
+        "url":{"raw":"http://localhost:3000/visitors","host":["http://localhost:3000"],"path":["visitors"]}
+      }
+    },
+    {
+      "name": "Visitors - List All",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/visitors","host":["http://localhost:3000"],"path":["visitors"]}}
+    },
+    {
+      "name": "Visitors - Get by ID",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/visitors/1","host":["http://localhost:3000"],"path":["visitors","1"]}}
+    },
+    {
+      "name": "Visitors - Update",
+      "request":{
+        "method":"PUT",
+        "header":[{"key":"Content-Type","value":"application/json"}],
+        "body":{"mode":"raw","raw":"{\n  \"nome\": \"Visitante Alt\"\n}"},
+        "url":{"raw":"http://localhost:3000/visitors/1","host":["http://localhost:3000"],"path":["visitors","1"]}
+      }
+    },
+    {
+      "name": "Visitors - Delete",
+      "request":{"method":"DELETE","url":{"raw":"http://localhost:3000/visitors/1","host":["http://localhost:3000"],"path":["visitors","1"]}}
+    },
+    {
+      "name": "Visitors - Upload Photo",
+      "request":{
+        "method":"POST",
+        "body":{"mode":"formdata","formdata":[{"key":"file","type":"file","src":""}]},
+        "url":{"raw":"http://localhost:3000/visitors/1/photo","host":["http://localhost:3000"],"path":["visitors","1","photo"]}
+      }
+    },
+    {
+      "name": "Visitors - List Photos",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/visitors/1/photos","host":["http://localhost:3000"],"path":["visitors","1","photos"]}}
+    },
+    {
+      "name": "Visitors - Latest Photo",
+      "request":{"method":"GET","url":{"raw":"http://localhost:3000/visitors/1/photos/latest","host":["http://localhost:3000"],"path":["visitors","1","photos","latest"]}}
+    }
+  ]
+}

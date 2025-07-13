@@ -1,46 +1,83 @@
 // src/pessoa/pessoa.entity.ts
+
 import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
-  JoinTable,
+  ManyToOne,
   ManyToMany,
+  JoinColumn,
+  JoinTable,
 } from 'typeorm';
 import { Grupo } from '../groups/grupo.entity';
+import { Departament } from '../departments/department.entity';
 
-@Entity()
+export enum PersonState {
+  SALVO = 'SALVO',
+  PENDENTE_ENVIO = 'PENDENTE_ENVIO',
+  ENVIADO = 'ENVIADO',
+  INATIVO = 'INATIVO',
+  EXCLUIDO_DEVICE = 'EXCLUIDO_DEVICE',
+}
+
+@Entity('pessoa')
 export class Pessoa {
-  @PrimaryGeneratedColumn()
-  id: number;
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
 
-  @Column({ length: 100 })
+  @Column()
   nome: string;
 
-  @Column({ length: 20, nullable: true })
-  matricula: string;
+  @Column({ nullable: true })
+  documentType?: string;
 
-  // Se houver integração com iDFace, armazenamos o ID retornado aqui
-  @Column({ type: 'int', nullable: true })
-  userIdIdface: number | null;
+  @Column({ nullable: true })
+  matricula?: string;
 
-  @Column({ length: 20, nullable: true })
-  rg: string;
+  @Column({ nullable: true })
+  rg?: string;
 
-  @Column({ length: 14, nullable: true })
-  cpf: string;
+  @Column({ nullable: true })
+  cpf?: string;
 
-  @Column({ length: 100, nullable: true })
-  email: string;
+  @Column({ nullable: true })
+  email?: string;
 
-  @Column({ length: 20, nullable: true })
-  telefone: string;
+  @Column({ nullable: true })
+  telefone?: string;
 
-  @Column({ length: 100, nullable: true })
-  senha: string;
+  @Column({ nullable: true })
+  observacoes?: string;
 
-  @Column({ length: 255, nullable: true })
-  observacoes: string;
+  @Column({ type: 'date', nullable: true })
+  shelfLifeDate?: Date;
 
+  @Column({ nullable: true })
+  fotoFilename?: string;
+
+  /** Estado no fluxo de sincronização */
+  @Column({
+    type: 'simple-enum',
+    enum: PersonState,
+    default: PersonState.SALVO,
+  })
+  state: PersonState;
+
+  /** Vinculação ao departamento (pai dos devices) */
+  @ManyToOne(() => Departament, { nullable: false })
+  @JoinColumn({ name: 'departmentId' })
+  department: Departament;
+
+  /** Grupos (ManyToMany) */
+  @ManyToMany(() => Grupo)
+  @JoinTable({
+    name: 'pessoa_grupos',
+    joinColumn: { name: 'pessoa_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'grupo_id', referencedColumnName: 'id' },
+  })
+  grupos: Grupo[];
+
+  /** Flags de controle */
   @Column({ default: false })
   administrador: boolean;
 
@@ -49,28 +86,4 @@ export class Pessoa {
 
   @Column({ default: false })
   listaExcecao: boolean;
-
-  // URL relativa para a foto (se enviada)
-  @Column({ nullable: true })
-  fotoUrl: string;
-
-  // Se a sincronização com iDFace falhar, marcamos como pendente
-  @Column({ default: false })
-  pendenteIdface: boolean;
-
-  @Column({ default: 0 })
-  creditos: number;
-
-  @ManyToMany(() => Grupo, (grupo) => grupo.pessoas, { cascade: true })
-  grupos: Grupo[];
-
-  @Column({ nullable: true })
-  idfaceId: number;    // ID no equipamento iDFace
-
-  @Column ({default: false})
-  isVisitante: boolean;
-  registro: any;
-
-  @Column({ type: 'int', nullable: true }) // ✅ CORRETO!
-  terminalId: number;
 }

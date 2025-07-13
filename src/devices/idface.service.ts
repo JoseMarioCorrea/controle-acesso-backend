@@ -1,200 +1,223 @@
 // src/idface/idface.service.ts
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { delay, firstValueFrom } from 'rxjs';
-import { TerminalsService } from 'src/terminals/terminals.service';
+import { Device } from 'src/devices/idaface.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { CreateDeviceDto } from './dto/createDevice.dto';
+import { UpdateDeviceDto } from './dto/updateDevice.dto';
 
 @Injectable()
 export class IdfaceService {
-  [x: string]: any;
   private readonly logger = new Logger(IdfaceService.name);
   private sessions: Record<number, string> = {};
 
   constructor(
-    private readonly http: HttpService,
-    private readonly terminalService: TerminalsService
+    private readonly httpService: HttpService,
+    @InjectRepository(Device)
+    private readonly deviceRepo: Repository<Device>,
   ) { }
 
-  private async getHttp(terminalId: number) {
-    const terminal = await this.terminalService.findById(terminalId);
-    const baseURL = `http://${terminal.host}:${terminal.port}`;
-    return this.http.axiosRef.create({ baseURL });
+  /**
+   * Retorna instância HTTP configurada para o device
+   */
+  private async getHttp(deviceId: number) {
+    const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
+    if (!device) throw new NotFoundException(`Device ${deviceId} não encontrado`);
+    const baseURL = `http://${device.ip}:${device.port}`;
+    return this.httpService.axiosRef.create({ baseURL, timeout: 5000 });
   }
 
-  private async ensureSession(terminalId: number, login = 'admin', password = 'admin') {
-    const http = await this.getHttp(terminalId);
-    const resp = await http.post('/login.fcgi', { login, password });
-    this.sessions[terminalId] = resp.data.session;
-    this.logger.log(`✔ Login terminal ${terminalId}: session=${resp.data.session}`);
+  /**
+   * Salva um novo device (nome, modelo, ip, porta) em base.
+   */
+  async createDevice(dto: CreateDeviceDto): Promise<Device> {
+    const device = this.deviceRepo.create(dto);
+    const saved = await this.deviceRepo.save(device);
+    this.logger.log(`✔ Device criado em DB id=${saved.id}`);
+    return saved;
   }
 
-  async login(terminalId: number, login: string, password: string) {
-    await this.ensureSession(terminalId, login, password);
-    return { session: this.sessions[terminalId] };
+  /**
+   * Lista todos os devices cadastrados.
+   */
+  async listDevices(): Promise<Device[]> {
+    return this.deviceRepo.find();
   }
 
-  async logout(terminalId: number) {
-    const http = await this.getHttp(terminalId);
-    await http.post(`/logout?session=${this.sessions[terminalId]}`, {});
-    this.logger.log(`✔ Logout terminal ${terminalId}`);
-    delete this.sessions[terminalId];
+  /**
+   * Busca um device pelo ID.
+   */
+  async getDevice(deviceId: number): Promise<Device> {
+    const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
+    if (!device) throw new NotFoundException(`Device ${deviceId} não encontrado`);
+    return device;
   }
 
-  async validateSession(terminalId: number) {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const resp = await http.get(`/session/valid?session=${this.sessions[terminalId]}`);
-    return { valid: resp.data.valid };
+  /**
+   * Atualiza os dados do device em base.
+   */
+  async updateDevice(
+    deviceId: number,
+    dto: UpdateDeviceDto
+  ): Promise<Device> {
+    const device = await this.getDevice(deviceId);
+    Object.assign(device, dto);
+    const saved = await this.deviceRepo.save(device);
+    this.logger.log(`✔ Device ${deviceId} atualizado em DB`);
+    return saved;
   }
 
-  async liberarAcesso(terminalId: number, userId: string): Promise<void> {
-    const client = this.getClientForTerminal(terminalId);
-    const res = await client.post(`/liberar_acesso.cgi`, { user_id: userId });
-    if (!res.data.success) {
-      throw new Error(`Falha ao liberar acesso para usuário ${userId}`);
+  /**
+   * Remove (delete) o device da base.
+   */
+  async deleteDevice(deviceId: number): Promise<void> {
+    const device = await this.getDevice(deviceId);
+    await this.deviceRepo.remove(device);
+    this.logger.log(`✔ Device ${deviceId} removido do DB`);
+  }
+
+  /**
+   * Garante sessão ativa no device
+   */
+  private async ensureSession(deviceId: number) {
+    if (!this.sessions[deviceId]) {
+      const http = await this.getHttp(deviceId);
+      const resp = await http.post('/login.fcgi', { login: 'admin', password: 'admin' });
+      if (!resp.data?.session) {
+        throw new BadRequestException(`Falha ao logar no device ${deviceId}`);
+      }
+      this.sessions[deviceId] = resp.data.session;
+      this.logger.log(`✔ Session criada: device=${deviceId}, session=${resp.data.session}`);
     }
   }
 
-  async releaseUserOnDevice(terminalId: number, userId: number, name: string): Promise<void> {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'access_rules',
-      values: [{ name: name, type: 1, priority: 1 }],
-    };
-    const response = await http.post(url, body);
-    if (response.data?.ids?.length !== 1) {
-      throw new Error('Erro ao liberar usuário no dispositivo');
+  /**
+   * Logout da sessão
+   */
+  async logout(deviceId: number): Promise<void> {
+    const http = await this.getHttp(deviceId);
+    const session = this.sessions[deviceId];
+    if (!session) return;
+    await http.post(`/logout?session=${session}`);
+    delete this.sessions[deviceId];
+    this.logger.log(`✔ Logout: device=${deviceId}`);
+  }
+
+  /**
+   * Cria usuários de forma assíncrona via batch
+   */
+  async createUsersBatch(
+    deviceId: number,
+    users: Array<{ name: string; registration: string }>
+  ): Promise<number[]> {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/create_objects.fcgi?session=${this.sessions[deviceId]}`;
+    const body = { object: 'users', values: users };
+    const resp = await http.post(url, body);
+    if (!resp.data?.ids) {
+      throw new BadRequestException('Erro ao criar usuários no device');
     }
-    this.logger.log(`✔ Usuário ${userId} liberado no terminal ${terminalId}`);
+    this.logger.log(`✔ Batch criado: ${resp.data.ids.length} users on device ${deviceId}`);
+    return resp.data.ids as number[];
   }
 
-
-  async reboot(terminalId: number) {
-    const http = await this.getHttp(terminalId);
-    await http.post(`/reboot?session=${this.sessions[terminalId]}`, {});
-  }
-
-  async factoryReset(terminalId: number) {
-    const http = await this.getHttp(terminalId);
-    await http.post(`/factory-reset?session=${this.sessions[terminalId]}`, {});
-  }
-
-  async setDateTime(terminalId: number, datetime: string) {
-    const http = await this.getHttp(terminalId);
-    await http.post(`/time?session=${this.sessions[terminalId]}`, { datetime });
-  }
-
-  async configureNetwork(terminalId: number, cfg: any) {
-    const http = await this.getHttp(terminalId);
-    await http.post(`/network?session=${this.sessions[terminalId]}`, cfg);
-  }
-
-  async createUserOnDevice(terminalId: number, name: string, registration = '', password = '', salt = ''): Promise<number> {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'users',
-      values: [{ name, registration, password, salt }],
-    };
-    const response = await http.post(url, body);
-    const userId = response.data?.ids?.[0];
-
-    if (!userId || typeof userId !== 'number') {
-      throw new BadRequestException('Erro ao criar usuário no iDFace');
+  /**
+   * Atualiza campos de usuários em lote
+   */
+  async updateUsersBatch(
+    deviceId: number,
+    updates: Array<{ id: number; values: Record<string, any> }>
+  ) {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/modify_objects.fcgi?session=${this.sessions[deviceId]}`;
+    for (const u of updates) {
+      const body = { object: 'users', values: [u.values], where: { users: { id: u.id } } };
+      await http.post(url, body);
     }
-
-    this.logger.log(`✔ Usuário criado: id=${userId} no terminal ${terminalId}`);
-
-    // Confirma se o usuário foi salvo corretamente antes de seguir
-    const confirmado = await this.confirmUserExists(terminalId, userId);
-    if (!confirmado) {
-      throw new BadRequestException(`Usuário ${userId} não confirmado no terminal ${terminalId}`);
-    }
-
-    // Liberação de acesso
-    await this.releaseUserOnDevice(terminalId, userId, name);
-
-    return userId;
-  }
-  async confirmUserExists(terminalId: number, userId: number): Promise<boolean> {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'users',
-      where: { users: { id: userId } }
-    };
-    const response = await http.post(url, body);
-    return response.data?.objects?.length > 0;
+    this.logger.log(`✔ Batch update: ${updates.length} users on device ${deviceId}`);
   }
 
-  async loadUserById(terminalId: number, userId: number) {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/load_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'users',
-      where: { users: { id: userId } },
-    };
-    const response = await http.post(url, body);
-    return response.data.objects?.[0] ?? null;
-  }
-
-  async uploadUserPhoto(terminalId: number, image: Buffer, userId: number): Promise<any> {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const timestamp = Math.floor(Date.now() / 1000);
-    const url = `/user_set_image.fcgi?user_id=${userId}&timestamp=${timestamp}&match=0&session=${this.sessions[terminalId]}`;
-    const response = await http.post(url, image, {
-      headers: { 'Content-Type': 'application/octet-stream' },
-    });
-    if (!response.data?.success) {
-      throw new BadRequestException({ message: 'Erro ao cadastrar foto' });
-    }
-    this.logger.log(`✔ Foto cadastrada para user_id=${userId} no terminal ${terminalId}`);
-    return response.data;
-  }
-
-  async updateUserOnDevice(terminalId: number, id: number, fields: Record<string, any>) {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/modify_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'users',
-      values: fields,
-      where: { users: { id } },
-    };
+  /**
+   * Remove objetos do device
+   */
+  async deleteObjects(
+    deviceId: number,
+    object: string,
+    where: Record<string, any>
+  ) {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/destroy_objects.fcgi?session=${this.sessions[deviceId]}`;
+    const body = { object, where };
     await http.post(url, body);
-    this.logger.log(`✔ Atualizado user id=${id} no terminal ${terminalId}`);
+    this.logger.log(`✔ destroy ${object} on device ${deviceId}`);
   }
 
-  async deleteUserFromDevice(terminalId: number, id: number) {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/destroy_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'users',
-      where: { users: { id } },
-    };
-    await http.post(url, body);
-    this.logger.log(`✔ Deletado user id=${id} no terminal ${terminalId}`);
+  /**
+   * Carrega objetos do device
+   */
+  async loadObjects(
+    deviceId: number,
+    object: string,
+    where?: Record<string, any>
+  ) {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/load_objects.fcgi?session=${this.sessions[deviceId]}`;
+    const body = { object, ...(where ? { where } : {}) };
+    const resp = await http.post(url, body);
+    return resp.data.objects;
   }
 
-  async assignUserToGroup(terminalId: number, userId: number, groupId: number) {
-    await this.ensureSession(terminalId);
-    const http = await this.getHttp(terminalId);
-    const url = `/create_objects.fcgi?session=${this.sessions[terminalId]}`;
-    const body = {
-      object: 'user_groups',
-      values: [{ user_id: userId, group_id: groupId }],
-    };
-    const response = await http.post(url, body);
-    if (!response.data?.ids?.length) {
-      throw new BadRequestException('Falha ao vincular usuário ao grupo');
+  /**
+   * Upload de foto de usuário
+   */
+  async uploadUserPhoto(
+    deviceId: number,
+    userId: number,
+    image: Buffer
+  ) {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/user_set_image.fcgi?user_id=${userId}&match=0&session=${this.sessions[deviceId]}`;
+    const resp = await http.post(url, image, { headers: { 'Content-Type': 'application/octet-stream' } });
+    if (!resp.data?.success) {
+      throw new BadRequestException('Erro ao cadastrar foto no device');
     }
-    this.logger.log(`✔ user_id=${userId} associado ao group_id=${groupId} no terminal ${terminalId}`);
+    this.logger.log(`✔ Foto cadastrada: user ${userId} on device ${deviceId}`);
+  }
+
+  /**
+   * Teste de identificação facial
+   */
+  async testUserImage(
+    deviceId: number,
+    image: Buffer
+  ) {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/user_test_image.fcgi?session=${this.sessions[deviceId]}`;
+    const resp = await http.post(url, image, { headers: { 'Content-Type': 'application/octet-stream' } });
+    return resp.data;
+  }
+
+  /**
+   * Exemplo de endpoint de acesso (liberar acesso)
+   */
+  async liberarAcesso(
+    deviceId: number,
+    userId: number
+  ) {
+    await this.ensureSession(deviceId);
+    const http = await this.getHttp(deviceId);
+    const url = `/liberar_acesso.cgi?session=${this.sessions[deviceId]}`;
+    const resp = await http.post(url, { user_id: userId });
+    if (!resp.data.success) {
+      throw new BadRequestException(`Falha ao liberar acesso para user ${userId}`);
+    }
+    this.logger.log(`✔ Acesso liberado: user ${userId} on device ${deviceId}`);
   }
 }

@@ -1,12 +1,20 @@
 // src/departments/departments.module.ts
 import { Module } from '@nestjs/common';
-import { DepartmentsService } from '../departments/departments.service';
-import { DepartmentsController } from '../departments/departments.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Department } from './department.entity';
+import { Departament } from './department.entity';
+import { Visitante } from '../visitors/visitor.entity';
+import { DepartmentsService } from './departments.service';
+import { DepartmentsController } from './departments.controller';
+import { Grupo } from '../groups/grupo.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Department])],
+  imports: [
+    TypeOrmModule.forFeature([
+      Departament, // já existia
+      Visitante, // e este
+      Grupo,
+    ]),
+  ],
   controllers: [DepartmentsController],
   providers: [DepartmentsService],
   exports: [DepartmentsService],

@@ -1,15 +1,19 @@
-// src/departments/department.entity.ts
+// src/departments/departamento.entity.ts
 import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { User } from '../users/user.entity';
+import { Grupo } from '../groups/grupo.entity';
+import { Device } from '../devices/idaface.entity';
 
-@Entity()
-export class Department {
+@Entity('departments')
+export class Departament {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ length: 100 })
   nome: string;
 
-  @OneToMany(() => User, (user) => user.departamento)
-  usuarios: User[];
+  @OneToMany(() => Grupo, grupo => grupo.department)
+  grupos: Grupo[];
+
+  @OneToMany(() => Device, device => device.department)
+  devices: Device[];
 }

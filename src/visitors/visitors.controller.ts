@@ -1,76 +1,98 @@
-// src/pessoa/visitors.controller.ts
+// src/visitors/visitors.controller.ts
 import {
   Controller,
   Get,
   Post,
-  Body,
-  Param,
-  Delete,
   Put,
-  UseInterceptors,
-  UploadedFile,
-  ParseIntPipe,
+  Delete,
+  Param,
+  Body,
   UsePipes,
   ValidationPipe,
-  Query,
+  ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { VisitorsService } from './visitors.service';
-import { CreatePessoaDto } from '../pessoa/dto/createPessoa.dto';
-import { UpdatePessoaDto } from '../pessoa/dto/updatePessoa.dto';
 import { Visitante } from './visitor.entity';
-import { Express } from 'express';
 import { CreateVisitorDto } from './dto/create-visitors.dto';
+import { UpdateVisitorDto } from './dto/update-visitor.dto';
 
 @Controller('visitors')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class VisitorsController {
-  constructor(private readonly visitorsService: VisitorsService) { }
+  constructor(private readonly visitorsService: VisitorsService) {}
 
+  /** Criar visitante (base) */
   @Post()
-  @UseInterceptors(FileInterceptor('foto'))
   create(
-    @UploadedFile() foto: Express.Multer.File,
-    @Body() body: CreateVisitorDto
-  ) {
-    return this.visitorsService.create({ ...body });
-  }
-
-  @Get()
-  async findAllVisitors(): Promise<Visitante[]> {
-    const all = await this.visitorsService.findAll();
-    return all
-  }
-
-  @Get(':id')
-  async findVisitorById(@Param('id', ParseIntPipe) id: number): Promise<Visitante> {
-    const visitante = await this.visitorsService.findById(id);
-    if (visitante == null) {
-      throw new Error('Visitante não encontrado');
-    }
-    return visitante;
-  }
-
-  @Put(':id')
-  @UseInterceptors(FileInterceptor('foto'))
-  async updateVisitor(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdatePessoaDto,
-    @UploadedFile() foto?: Express.Multer.File,
+    @Body() dto: CreateVisitorDto,
   ): Promise<Visitante> {
-    const payload = {
-      ...dto,
-      isVisitante: true, // mantém true mesmo na edição
-    };
-    return this.visitorsService.update(id, payload);
+    return this.visitorsService.createBase(dto);
   }
 
+  /** Listar todos visitantes */
+  @Get()
+  findAll(): Promise<Visitante[]> {
+    return this.visitorsService.findAll();
+  }
+
+  /** Buscar visitante por ID */
+  @Get(':id')
+  findById(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<Visitante> {
+    return this.visitorsService.findById(id);
+  }
+
+  /** Atualizar visitante (base) */
+  @Put(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateVisitorDto,
+  ): Promise<Visitante> {
+    return this.visitorsService.updateBase(id, dto);
+  }
+
+  /** Remover visitante (base) */
   @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(
     @Param('id', ParseIntPipe) id: number,
-    @Query('terminalId', ParseIntPipe) terminalId: number
-  ) {
-    return this.visitorsService.remove(id, terminalId);
+  ): Promise<void> {
+    return this.visitorsService.removeBase(id);
   }
 
+  /** Upload de foto de visitante */
+  @Post(':id/photo')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadPhoto(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const path = await this.visitorsService.savePhoto(id, file);
+    return { path };
+  }
+
+  /** Listar URLs de fotos */
+  @Get(':id/photos')
+  listPhotos(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<string[]> {
+    return this.visitorsService.listPhotos(id);
+  }
+
+  /** URL da foto mais recente */
+  @Get(':id/photos/latest')
+  async latestPhoto(
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const path = await this.visitorsService.getLatestPhoto(id);
+    if (!path) throw new NotFoundException('Nenhuma foto encontrada');
+    return { path };
+  }
 }

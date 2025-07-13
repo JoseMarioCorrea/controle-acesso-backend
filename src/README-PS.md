@@ -1,132 +1,143 @@
-# Rodar servidor Mysql
-- cd "C:\Program Files\MySQL\MySQL Server 8.0\bin"
-.\mysql.exe -u root -p
+# Documentação das Modificações
 
-
-
-# 🛡️ Controle de Acesso - Backend (NestJS)
-
-Este projeto é o backend de um sistema de controle de acesso que se comunica diretamente com equipamentos iDFace (Control iD) via REST API. Desenvolvido com **NestJS**, com integração a **MySQL** e interface com dispositivos físicos.
+Este documento resume em **markdown** todas as alterações realizadas no projeto de Controle de Acesso.
 
 ---
 
-## 📦 Tecnologias Utilizadas
+## 1. Módulos e Integrações
 
-- **NestJS** (TypeScript)
-- **Axios** (comunicação com iDFace)
-- **MySQL** (via TypeORM)
-- **class-validator + DTOs**
-- **dotenv**
+### 1.1 AuthModule
 
----
+* **Novo endpoint** `POST /auth/login` em `AuthController`.
+* **`OauthService`**: gera usuário `admin/admin` na inicialização (`seedAdmin`), faz validação de credenciais e retorna dados sem senha.
 
-## ⚙️ Instalação
+### 1.2 IdfaceModule
 
-```bash
-git clone https://github.com/seuusuario/controle-acesso-backend.git
-cd controle-acesso-backend
-npm install
-```
+* **Importações**: `HttpModule`, `TypeOrmModule.forFeature([Device])`.
+* **`IdfaceService`**: adapta toda a comunicação HTTP com o device Control ID via CGI:
 
-Crie um arquivo `.env` na raiz:
+  * `ensureSession`: login e cache de sessão.
+  * Métodos genéricos: `createUsersBatch`, `updateUsersBatch`, `loadObjects`, `deleteObjects`.
+  * Upload e teste de foto (`uploadUserPhoto`, `testUserImage`).
+  * Endpoint de liberação de acesso (`liberarAcesso`).
 
-```env
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_USERNAME=root
-DB_PASSWORD=suasenha
-DB_DATABASE=controle_acesso
+### 1.3 SyncModule
 
-IDFACE_BASE_URL=http://192.168.18.220
-IDFACE_USER=admin
-IDFACE_PASS=admin
-IDFACE_DEVICE_ID=1
-```
+* **`ScheduleModule.forRoot()`** ativado para cron.
+* **`SyncService`** agendado a cada 30s:
 
-Rode o projeto:
-
-```bash
-npm run start:dev
-```
+  * Transições de estado (**SALVO** → **PENDENTE\_ENVIO** → **ENVIADO**).
+  * Envio de `Pessoa` e `Visitante` via `IdfaceService`.
+  * Exclusão de objetos para estados **INATIVO** → **EXCLUIDO\_DEVICE**.
 
 ---
 
-## 📡 Endpoints - iDFace
+## 2. Entidades (TypeORM)
 
-| Método | Rota                          | Descrição                             |
-|--------|-------------------------------|----------------------------------------|
-| POST   | `/idface/login`              | Login no dispositivo                   |
-| POST   | `/idface/logout`             | Logout da sessão                       |
-| GET    | `/idface/session/valid`      | Verifica se sessão está ativa          |
-| POST   | `/idface/reboot`             | Reinicia o dispositivo                 |
-| POST   | `/idface/factory-reset`      | Restaura padrões de fábrica            |
-| POST   | `/idface/time`               | Define data/hora                       |
-| POST   | `/idface/network`            | Configura rede IP                      |
-| POST   | `/idface/vpn/config`         | Define config de VPN                   |
-| POST   | `/idface/vpn/upload-config`  | Envia arquivo .conf em base64          |
-| POST   | `/idface/vpn/upload-zip`     | Envia zip VPN em base64                |
-| POST   | `/idface/gpio`               | Consulta status de GPIO                |
+### 2.1 Pessoa
 
----
+* **Enum** `PersonState` adicionado e coluna `state` (`enum`, default `SALVO`).
+* Coluna `departmentId` + relação `ManyToOne(Departamento)`.
+* `ManyToMany` com `Grupo` via tabela **pessoa\_grupos**.
+* Campos de foto: `fotoFilename`.
+* Flags: `administrador`, `inativo`, `listaExcecao`, `isVisitante`.
 
-## 👤 Endpoints - Usuário (com device_id)
+### 2.2 Departamento
 
-| Método | Rota                             | Descrição                                   |
-|--------|----------------------------------|----------------------------------------------|
-| POST   | `/idface/user/authentication`    | Define modo de autenticação do usuário       |
-| POST   | `/idface/user/device`            | Associa usuário ao dispositivo               |
-| POST   | `/idface/user/group`             | Associa usuário a um grupo                   |
-| POST   | `/idface/user/schedule`          | Define horário de acesso do usuário          |
-| POST   | `/idface/user/delete`            | Remove usuário do equipamento                |
+* `Entity('departments')`: relação `OneToMany` com `Grupo` e `Device`.
 
----
+### 2.3 Grupo
 
-## 🗂️ Estrutura de Pastas
+* `Entity('grupos')`: `ManyToOne` → `Department` (coluna `departmentId`).
+* `ManyToMany` com `Pessoa` e com `Visitante` (via entity invertida).
 
-```
-src/
-│
-├── devices/               # Módulo iDFace
-│   ├── dto/               # DTOs de entrada
-│   ├── idface.controller.ts
-│   └── idface.service.ts
-│
-├── users/                 # Módulo de usuários
-├── schedules/             # Horários
-├── holidays/              # Feriados
-├── departments/           # Departamentos
-├── alarms/                # Alarmes e GPIO
-└── app.module.ts
-```
+### 2.4 Device
+
+* `Entity('idface')`: `id`, `nome`, `ip`, FK `departmentId` → `Department`.
+
+### 2.5 Visitante
+
+* **Enum** `VisitorState` e coluna `state` (`enum`, default `SALVO`).
+* Campos básicos e `visitedCompanyId`.
+* `ManyToMany` com `Grupo` via tabela **visitante\_grupos**.
+* Foto em disco: `fotoFilename`.
 
 ---
 
-## 🧪 Testes via Postman
+## 3. DTOs e Validações
 
-Use o arquivo Postman disponível em:
+### 3.1 Create/UpdatePessoaDto
 
-📥 [`idface-full-collection.postman_collection.json`](./idface-full-collection.postman_collection.json)
+* Campos ajustados: `departmentId: number`, `grupos: number[]`, sem terminalId.
+* `class-validator` + `class-transformer` para tipar corretamente.
 
----
+### 3.2 Create/UpdateVisitorDto
 
-## 📘 Requisitos da API iDFace (Control iD)
+* Campos obrigatórios: `selectedGroups: number[]`, opcional `visitedCompanyId: number`.
+* Removido `terminalId`, `userIdIdface` do DTO.
 
-- Toda requisição requer sessão via `?session=abc123`
-- Autenticação inicial: `POST /login.fcgi` com `login` e `password`
-- Campos como `device_id` são obrigatórios para operações de usuário
-- Requisições em JSON via `Content-Type: application/json`
+### 3.3 CreateDepartmentDto
 
----
-
-## ✅ To-Do Futuro
-
-- Integração com Frontend React Native
-- Cadastro de usuários com biometria ou facial
-- Suporte a múltiplos dispositivos simultâneos
-- Logs de auditoria e notificações
+* `deviceId: number` em vez de `device`.
+* `userIds?: number[]`, `visitorIds?: number[]` com validações.
 
 ---
 
-## 🧑‍💻 Autor
+## 4. Services
 
-Desenvolvido por **José Mario Corrêa** com ❤️ e NestJS.
+### 4.1 PessoasService
+
+* Métodos **base-only**: `createBase`, `updateBase`, `removeBase`, `findAll`, `findById`.
+* Upload/listagem de fotos em `uploads/pessoas/{userId}`.
+
+### 4.2 VisitorsService
+
+* Métodos **base-only** equivalentes: `createBase`, `updateBase`, `removeBase`, `findAll`, `findById`.
+* Upload/listagem de fotos em `uploads/visitors/{visitorId}`.
+
+### 4.3 DepartmentsService (sem alteração central) e TerminalsService existiam previamente.
+
+---
+
+## 5. Controllers
+
+### 5.1 AuthController (/auth)
+
+* `POST /login` → `OauthService.login`.
+
+### 5.2 DepartmentsController (/departments)
+
+* GET all, GET/\:id, POST (com criação de grupo padrão), PUT/\:id, DELETE/\:id, GET/\:id/groups.
+
+### 5.3 IdfaceController (/idface)
+
+* Batch create/update users, load/delete objects, upload/test photo, liberar acesso.
+
+### 5.4 PessoasController (/pessoas)
+
+* CRUD base, upload foto, list photos, latest photo.
+
+### 5.5 VisitorsController (/visitors)
+
+* CRUD base, upload photo, list photos, latest photo.
+
+### 5.6 (Opcional) SyncController (/sync)
+
+* `POST /sync` para disparar manualmente a sincronização (não obrigatório).
+
+---
+
+## 6. Agendamento e Fluxo de Estados
+
+1. **Criação** de Pessoa/Visitante → estado `SALVO`.
+2. **SyncService** roda a cada 30s:
+
+   * `SALVO` → `PENDENTE_ENVIO`.
+   * Envia ao device → `ENVIADO`.
+3. Se `inativo` setado manualmente:
+
+   * Sync detecta `INATIVO` → exclui do device → `EXCLUIDO_DEVICE`.
+
+---
+
+**Fim da documentação.** Copie e adapte conforme necessário. Qualquer dúvida ou acréscimo, é só falar!
