@@ -18,14 +18,14 @@ import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
 import { CreateGrupoDto } from '../groups/dto/create-grupo.dto';
 import { Grupo } from '../groups/grupo.entity';
-import { Department } from './department.entity';
+import { Departament } from './department.entity';
 
 @Controller('departments')
 export class DepartmentsController {
   constructor(
     private readonly departmentsService: DepartmentsService,
-    @InjectRepository(Department)
-    private readonly deptRepo: Repository<Department>,
+    @InjectRepository(Departament)
+    private readonly deptRepo: Repository<Departament>,
     @InjectRepository(Grupo)
     private readonly grupoRepo: Repository<Grupo>,
   ) {}
@@ -59,13 +59,13 @@ export class DepartmentsController {
    * Cria um departamento e, em seguida, um grupo padrão do tipo 3
    */
   @Post()
-  async create(@Body() dto: CreateDepartmentDto): Promise<Department> {
+  async create(@Body() dto: CreateDepartmentDto): Promise<Departament> {
     // 1) cria o departamento
     const dept = this.deptRepo.create(dto);
     await this.deptRepo.save(dept);
 
     // 2) cria automaticamente um grupo do tipo “3”
-    const grupoDto: CreateGrupoDto & { department: Department } = {
+    const grupoDto: CreateGrupoDto & { department: Departament } = {
       nome: `Grupo ${dept.nome}`,
       descricao: `Grupo padrão para o departamento ${dept.nome}`,
       // se o seu CreateGrupoDto não levar `department` no body,

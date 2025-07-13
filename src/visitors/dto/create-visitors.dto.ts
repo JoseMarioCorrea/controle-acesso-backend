@@ -1,16 +1,19 @@
+// src/visitors/dto/createVisitor.dto.ts
 import { Type } from 'class-transformer';
 import {
   IsString,
   IsOptional,
   IsEmail,
-  IsInt,
-  IsNumber,
   IsArray,
   ArrayUnique,
+  IsInt,
+  IsNotEmpty,
 } from 'class-validator';
 
 export class CreateVisitorDto {
+  @IsOptional()
   @IsString()
+  @IsNotEmpty()
   nome: string;
 
   @IsOptional()
@@ -21,7 +24,6 @@ export class CreateVisitorDto {
   @IsString()
   idUsuario?: string;
 
-  // RG ou CPF do visitante
   @IsOptional()
   @IsString()
   rg?: string;
@@ -30,7 +32,6 @@ export class CreateVisitorDto {
   @IsString()
   cpf?: string;
 
-  // Caso queira guardar o nome da empresa (não obrigatório se usar visitedCompanyId)
   @IsOptional()
   @IsString()
   visitorCompany?: string;
@@ -55,28 +56,15 @@ export class CreateVisitorDto {
   @IsString()
   shelfLifeTime?: string;
 
-  @IsOptional()
+  /** IDs dos grupos aos quais esse visitante pertence */
   @IsArray()
   @ArrayUnique()
+  @Type(() => Number)
   @IsInt({ each: true })
-  @Type(() => Number)
-  selectedGroups?: number[];
+  @IsNotEmpty({ each: true })
+  selectedGroups: number[];
 
-  @Type(() => Number)
-  @IsInt({ message: 'terminalId deve ser um número inteiro' })
-  terminalId: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  departmentId?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  userIdIdface?: number;
-
-  // ID da empresa que será visitada, se aplicável
+  /** (Opcional) ID da empresa visitada */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

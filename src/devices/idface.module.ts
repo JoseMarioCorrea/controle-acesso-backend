@@ -6,12 +6,15 @@ import { IdfaceController } from './idface.controller';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Terminal } from 'src/terminals/terminal.entity';
 import { TerminalsModule } from 'src/terminals/terminals.module';
+import { Device } from './idaface.entity';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 @Module({
   imports: [
     ConfigModule,
     TerminalsModule, // para pegar IDFACE_BASE_URL e DEVICE_ID do .env
     Terminal,
+    TypeOrmModule.forFeature([Device]),
     HttpModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

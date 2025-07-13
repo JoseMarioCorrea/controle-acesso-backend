@@ -19,12 +19,7 @@ export class CreatePessoaDto {
   @IsString()
   matricula?: string;
 
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  userIdIdface?: number;
-
-  @IsOptional()
+  @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
   departmentId?: number;
@@ -55,10 +50,6 @@ export class CreatePessoaDto {
 
   @IsOptional()
   @IsString()
-  idUsuario?: string;
-
-  @IsOptional()
-  @IsString()
   observacoes?: string;
 
   /** IDs dos grupos (ManyToMany) */
@@ -85,11 +76,6 @@ export class CreatePessoaDto {
   listaExcecao?: boolean;
 
   @IsOptional()
-  @Type(() => Boolean)
-  @IsBoolean()
-  isVisitante?: boolean;
-
-  @Type(() => Number)
-  @IsInt()
-  terminalId: number;
+  @IsString()
+  situacao?: string;
 }

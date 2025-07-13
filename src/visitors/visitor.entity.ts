@@ -1,5 +1,12 @@
-import { Department } from '../departments/department.entity';
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
+// src/visitors/visitor.entity.ts
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToMany,
+  JoinTable,
+} from 'typeorm';
+import { Grupo } from '../groups/grupo.entity';
 
 @Entity('visitantes')
 export class Visitante {
@@ -10,51 +17,49 @@ export class Visitante {
   nome: string;
 
   @Column({ nullable: true })
-  visitor_rg: string;
+  documentType?: string;
 
   @Column({ nullable: true })
-  visitor_cpf: string;
+  rg?: string;
 
   @Column({ nullable: true })
-  rg: string;
+  cpf?: string;
 
   @Column({ nullable: true })
-  cpf: string;
+  phone?: string;
 
   @Column({ nullable: true })
-  phone: string;
+  email?: string;
+
+  @Column({ type: 'text', nullable: true })
+  observacoes?: string;
+
+  @Column({ type: 'date', nullable: true })
+  shelfLifeDate?: Date;
+
+  @Column({ type: 'time', nullable: true })
+  shelfLifeTime?: string;
 
   @Column({ nullable: true })
-  email: string;
+  visitorCompany?: string;
 
+  @Column({ type: 'int', nullable: true })
+  visitedCompanyId?: number;
+
+  /**
+   * Relação de grupos para controle de acesso assíncrono.
+   */
+  @ManyToMany(() => Grupo, grupo => grupo.visitantes)
+  @JoinTable({
+    name: 'visitante_grupos',
+    joinColumn: { name: 'visitante_id', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'grupo_id', referencedColumnName: 'id' },
+  })
+  grupos: Grupo[];
+
+  /**
+   * Caminho da foto salva no disco (opcional).
+   */
   @Column({ nullable: true })
-  observacoes: string;
-
-  @Column({ nullable: true })
-  validade: string;
-
-  @Column({ nullable: true })
-  visitorCompany: string;
-
-  @Column({ nullable: true })
-  visitedCompanyName: string;
-
-  @Column({ nullable: true })
-  shelfLifeDate: string;
-
-  @Column({ nullable: true })
-  shelfLifeTime: string;
-
-  @Column({ nullable: true })
-  matricula: string;
-
-  @Column({ type: 'int', nullable: true }) // ✅ CORRETO!
-  terminalId: number;
-  @ManyToMany(() => Department, (d) => d.visitantes)
-  departmento: Department[];
-  foto: string;
-  // src/visitors/visitor.entity.ts
-  @Column({ type: 'int', unsigned: true })
-  userIdIdface!: number;
-
+  fotoFilename?: string;
 }

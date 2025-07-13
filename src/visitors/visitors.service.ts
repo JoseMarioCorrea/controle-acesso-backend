@@ -1,99 +1,185 @@
 // src/visitors/visitors.service.ts
-import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IdfaceService } from '../devices/idface.service';
-import { VisitorPhotoService } from './visitorPhoto.service';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Visitante } from './visitor.entity';
 import { CreateVisitorDto } from './dto/create-visitors.dto';
 import { UpdateVisitorDto } from './dto/update-visitor.dto';
-import { Express } from 'express';
+import { Grupo } from '../groups/grupo.entity';
+import { join, dirname } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  copyFileSync,
+  readdirSync,
+} from 'fs';
+
+function getBaseDir(): string {
+  const runningInPkg = typeof (process as any).pkg !== 'undefined';
+  return runningInPkg ? dirname(process.execPath) : join(__dirname, '..');
+}
 
 @Injectable()
 export class VisitorsService {
+  private readonly logger = new Logger(VisitorsService.name);
+
   constructor(
     @InjectRepository(Visitante)
     private readonly visitorRepo: Repository<Visitante>,
-    private readonly idface: IdfaceService,
-    private readonly photoSvc: VisitorPhotoService,
+    @InjectRepository(Grupo)
+    private readonly grupoRepo: Repository<Grupo>,
   ) { }
 
-  async create(dto: CreateVisitorDto, file?: Express.Multer.File): Promise<Visitante> {
-    if (dto.terminalId == null) {
-      throw new BadRequestException('terminalId é obrigatório');
+  /**
+   * Cria visitante no DB (base)
+   */
+  async createBase(dto: CreateVisitorDto): Promise<Visitante> {
+    const { selectedGroups, visitedCompanyId, ...rest } = dto;
+
+    if (!Array.isArray(selectedGroups) || selectedGroups.length === 0) {
+      throw new BadRequestException(
+        'selectedGroups deve conter ao menos um grupo',
+      );
     }
 
-    // cria sem foto primeiro
-    const visitante = this.visitorRepo.create({ ...dto });
+    // Buscar e validar grupos
+    const grupos = await this.grupoRepo.findBy({ id: In(selectedGroups) });
+    if (grupos.length !== selectedGroups.length) {
+      throw new BadRequestException('Algum grupo não foi encontrado');
+    }
+
+    // Criar entidade já associando tudo
+    const visitante = this.visitorRepo.create({
+      ...rest,
+      grupos,
+      visitedCompanyId,
+    });
+
+    // Salvar no banco
     const saved = await this.visitorRepo.save(visitante);
+    this.logger.log(`✔ Visitante criado no DB id=${saved.id}`);
+    return this.findById(saved.id);
+  }
 
-    // se veio arquivo, salva no disco e atualiza o registro
-    if (file) {
-      try {
-        const url = await this.photoSvc.savePhoto(saved.id, file);
-        saved.foto = url;
-        await this.visitorRepo.save(saved);
-      } catch (err) {
-        throw new InternalServerErrorException('Falha ao salvar foto', err.message);
-      }
+  /**
+   * Atualiza visitante no DB (base)
+   */
+  async updateBase(
+    id: number,
+    dto: UpdateVisitorDto,
+  ): Promise<Visitante> {
+    // Carrega com relações (única instância, não array)
+    const visitante = await this.visitorRepo.findOne({
+      where: { id },
+      relations: ['grupos'],
+    });
+    if (!visitante) {
+      throw new NotFoundException(`Visitante ${id} não encontrado`);
     }
 
-    // empurra pro device
-    await this.idface.login(dto.terminalId, 'admin', 'admin');
-    await this.idface.createUserOnDevice(dto.terminalId, dto.nome);
+    const { selectedGroups, visitedCompanyId, ...rest } = dto;
 
+    // Atualiza grupos
+    if (selectedGroups) {
+      const grupos = await this.grupoRepo.findBy({ id: In(selectedGroups) });
+      if (grupos.length !== selectedGroups.length) {
+        throw new BadRequestException('Algum grupo não foi encontrado');
+      }
+      visitante.grupos = grupos;
+    }
+
+    // Atualiza demais campos
+    Object.assign(visitante, rest);
+    if (visitedCompanyId !== undefined) {
+      visitante.visitedCompanyId = visitedCompanyId;
+    }
+
+    const saved = await this.visitorRepo.save(visitante);
+    this.logger.log(`✔ Visitante ${id} atualizado no DB`);
     return saved;
   }
 
+  /**
+   * Lista todos os visitantes
+   */
   async findAll(): Promise<Visitante[]> {
-    return this.visitorRepo.find();
-  }
-  // cria este helper
-  async findByIdFace(userIdIdface: number) {
-    const v = await this.visitorRepo.findOne({ where: { userIdIdface } });
-    if (!v) throw new NotFoundException('Não achei visitor pelo idface');
-    return v;
+    return this.visitorRepo.find({ relations: ['grupos'] });
   }
 
-  async updateByIdFace(idface: number, dto: UpdateVisitorDto, file?: Express.Multer.File) {
-    const v = await this.findByIdFace(idface);
-    return this.update(v.id, dto, file);
-  }
-
+  /**
+   * Busca visitante por ID
+   */
   async findById(id: number): Promise<Visitante> {
-    return this.visitorRepo.findOneOrFail({ where: { id } });
+    const visitante = await this.visitorRepo.findOne({
+      where: { id },
+      relations: ['grupos'],
+    });
+    if (!visitante) throw new NotFoundException(`Visitante ${id} não encontrado`);
+    return visitante;
   }
 
-  async update(
-    id: number,
-    dto: UpdateVisitorDto,
-    file?: Express.Multer.File,
-  ): Promise<Visitante> {
-    const visitante = await this.visitorRepo.findOne({ where: { id } });
-    if (!visitante) throw new NotFoundException('Visitante não encontrado');
+  /**
+   * Remove visitante do DB (base)
+   */
+  async removeBase(id: number): Promise<void> {
+    const visitante = await this.findById(id);
+    await this.visitorRepo.remove(visitante);
+    this.logger.log(`✔ Visitante ${id} removido do DB`);
+  }
 
-    Object.assign(visitante, dto);
-    await this.visitorRepo.save(visitante);
+  /**
+   * Salva foto no disco e retorna URL pública.
+   */
+  async savePhoto(
+    visitorId: number,
+    file: Express.Multer.File,
+  ): Promise<string> {
+    const baseDir = getBaseDir();
+    const dir = join(baseDir, 'uploads', 'visitors', String(visitorId));
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-    if (file) {
-      try {
-        const url = await this.photoSvc.savePhoto(id, file);
-        visitante.foto = url;
-        await this.visitorRepo.save(visitante);
-      } catch (err) {
-        throw new InternalServerErrorException('Falha ao atualizar foto', err.message);
-      }
+    const filename = `${Date.now()}-${file.originalname}`;
+    const dest = join(dir, filename);
+
+    if (file.buffer) {
+      writeFileSync(dest, file.buffer);
+    } else if (file.path) {
+      copyFileSync(file.path, dest);
+    } else {
+      throw new BadRequestException('Arquivo de foto inválido');
     }
 
-    return this.visitorRepo.findOneOrFail({ where: { id } });
+    this.logger.log(
+      `✔ Foto salva para visitante=${visitorId}, arquivo=${filename}`,
+    );
+    return `/uploads/visitors/${visitorId}/${filename}`;
   }
 
-  async remove(id: number, terminalId: number): Promise<void> {
-    const visitante = await this.visitorRepo.findOne({ where: { id } });
-    if (!visitante) throw new NotFoundException('Visitante não encontrado');
+  /**
+   * Lista todas as URLs de fotos do visitante.
+   */
+  async listPhotos(visitorId: number): Promise<string[]> {
+    const baseDir = getBaseDir();
+    const dir = join(baseDir, 'uploads', 'visitors', String(visitorId));
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir).map(
+      (f) => `/uploads/visitors/${visitorId}/${f}`,
+    );
+  }
 
-    await this.visitorRepo.remove(visitante);
-    await this.idface.login(terminalId, 'admin', 'admin');
-    await this.idface.deleteUserFromDevice(terminalId, visitante.userIdIdface);
+  /**
+   * Retorna URL da foto mais recente.
+   */
+  async getLatestPhoto(visitorId: number): Promise<string> {
+    const paths = await this.listPhotos(visitorId);
+    if (!paths.length) return '';
+    paths.sort().reverse();
+    return paths[0];
   }
 }

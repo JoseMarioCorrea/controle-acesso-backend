@@ -4,9 +4,10 @@ import { TerminalsService } from './terminals.service';
 import { TerminalsController } from './terminals.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Terminal } from './terminal.entity';
+import { Device } from 'src/devices/idaface.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Terminal])],
+  imports: [TypeOrmModule.forFeature([Terminal]), Device],
   providers: [TerminalsService],
   controllers: [TerminalsController],
   exports: [TerminalsService], // 👈 ESSENCIAL para outros módulos

@@ -2,27 +2,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Department } from './department.entity';
+import { Departament } from './department.entity';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
-import { User } from '../users/user.entity';
 import { Visitante } from '../visitors/visitor.entity';
 import { Grupo } from '../groups/grupo.entity';
 import { CreateGrupoDto } from '../groups/dto/create-grupo.dto';
 @Injectable()
 export class DepartmentsService {
   constructor(
-    @InjectRepository(Department)
-    private readonly deptRepo: Repository<Department>,
-    @InjectRepository(User)
-    private readonly userRepo: Repository<User>,
+    @InjectRepository(Departament)
+    private readonly deptRepo: Repository<Departament>,
     @InjectRepository(Visitante)
     private readonly visitorRepo: Repository<Visitante>,
     @InjectRepository(Grupo)
     private readonly grupoRepo: Repository<Grupo>,
   ) {}
 
-  /* async create(dto: CreateDepartmentDto): Promise<Department> {
+  /* async create(dto: CreateDepartmentDto): Promise<Departament> {
     // carga de usuários e visitantes, se passar ids
     const usuarios = dto.userIds?.length
       ? await this.userRepo.findByIds(dto.userIds)
@@ -40,26 +37,21 @@ export class DepartmentsService {
     return this.deptRepo.save(dept);
   }*/
 
-  async findAll(): Promise<Department[]> {
+  async findAll(): Promise<Departament[]> {
     return this.deptRepo.find();
   }
 
-  async findOne(id: number): Promise<Department> {
+  async findOne(id: number): Promise<Departament> {
     return this.deptRepo.findOneOrFail({ where: { id } });
   }
 
-  async update(id: number, dto: UpdateDepartmentDto): Promise<Department> {
+  async update(id: number, dto: UpdateDepartmentDto): Promise<Departament> {
     const dept = await this.deptRepo.findOne({ where: { id } });
     if (!dept) throw new NotFoundException('Departamento não encontrado');
 
-    if (dto.userIds) {
-      dept.usuarios = await this.userRepo.findByIds(dto.userIds);
-    }
     if (dto.visitorIds) {
-      dept.visitantes = await this.visitorRepo.findByIds(dto.visitorIds);
     }
     if (dto.nome) dept.nome = dto.nome;
-    if (dto.terminalId) dept.terminalId = dto.terminalId;
 
     return this.deptRepo.save(dept);
   }
@@ -69,16 +61,16 @@ export class DepartmentsService {
     if (!dept) throw new NotFoundException('Departamento não encontrado');
     await this.deptRepo.remove(dept);
   }
-  async create(dto: CreateDepartmentDto): Promise<Department> {
+  async create(dto: CreateDepartmentDto): Promise<Departament> {
     // 1) cria o departamento
     const dept = this.deptRepo.create(dto);
     await this.deptRepo.save(dept);
 
     // 2) cria automaticamente um grupo do tipo “3” (ou com o mesmo nome do depto, etc)
-    const grupoDto: CreateGrupoDto & { department_id: number } = {
+    const grupoDto: CreateGrupoDto & { departmentId: number } = {
       nome: `Grupo ${dept.nome}`,
       descricao: `Grupo padrão para o departamento ${dept.nome}`,
-      department_id: dept.id,
+      departmentId: dept.id,
     };
     const grupo = this.grupoRepo.create(grupoDto);
     await this.grupoRepo.save(grupo);
@@ -88,7 +80,7 @@ export class DepartmentsService {
 
   async findGroupsByDepartment(departmentId: number): Promise<Grupo[]> {
     return this.grupoRepo.find({
-      where: { department_id: departmentId },
+      where: { departmentId: departmentId },
     });
   }
 }

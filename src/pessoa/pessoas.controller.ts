@@ -9,16 +9,15 @@ import {
   Param,
   UseInterceptors,
   UploadedFile,
-  ParseIntPipe,
   UsePipes,
   ValidationPipe,
+  ParseUUIDPipe,
   NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { PessoasService } from './pessoas.service';
 import { CreatePessoaDto } from './dto/createPessoa.dto';
 import { UpdatePessoaDto } from './dto/updatePessoa.dto';
-import { Express } from 'express';
 import { Pessoa } from './pessoa.entity';
 
 @Controller('pessoas')
@@ -26,71 +25,79 @@ import { Pessoa } from './pessoa.entity';
 export class PessoasController {
   constructor(private readonly pessoasService: PessoasService) {}
 
-  /** POST /pessoas */
+  /**
+   * Cria pessoa (base) sem integração síncrona
+   */
   @Post()
   @UseInterceptors(FileInterceptor('foto'))
   create(
     @Body() dto: CreatePessoaDto,
     @UploadedFile() foto?: Express.Multer.File,
   ): Promise<Pessoa> {
-    return this.pessoasService.create(dto, foto);
+    return this.pessoasService.createBase(dto, foto?.filename);
   }
 
-  /** GET /pessoas */
+  /** Lista todas as pessoas com depto e grupos */
   @Get()
   findAll(): Promise<Pessoa[]> {
     return this.pessoasService.findAll();
   }
 
-  /** GET /pessoas/:id */
+  /** Busca pessoa por ID */
   @Get(':id')
-  findById(@Param('id', ParseIntPipe) id: number): Promise<Pessoa> {
+  findById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<Pessoa> {
     return this.pessoasService.findById(id);
   }
 
-  /** PUT /pessoas/:id */
+  /** Atualiza pessoa (base) sem integração síncrona */
   @Put(':id')
   @UseInterceptors(FileInterceptor('foto'))
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePessoaDto,
     @UploadedFile() foto?: Express.Multer.File,
   ): Promise<Pessoa> {
-    return this.pessoasService.update(id, dto, foto);
+    return this.pessoasService.updateBase(id, dto, foto?.filename);
   }
 
-  /** DELETE /pessoas/:id/:terminalId */
-  @Delete(':id/:terminalId')
+  /** Remove pessoa (base) */
+  @Delete(':id')
   remove(
-    @Param('id', ParseIntPipe) id: number,
-    @Param('terminalId', ParseIntPipe) terminalId: number,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<void> {
-    return this.pessoasService.remove(id, terminalId);
+    return this.pessoasService.removeBase(id);
   }
 
-  /** POST /pessoas/:id/fotos */
+  /** Upload de foto */
   @Post(':id/fotos')
   @UseInterceptors(FileInterceptor('foto'))
-  async uploadPhoto(
-    @Param('id', ParseIntPipe) id: number,
+  uploadPhoto(
+    @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() foto: Express.Multer.File,
   ): Promise<{ path: string }> {
-    const path = await this.pessoasService.savePhoto(id, foto);
-    return { path };
+    return this.pessoasService.savePhoto(id, foto)
+      .then(path => ({ path }));
   }
 
-  /** GET /pessoas/:id/fotos */
+  /** Lista URLs de todas as fotos */
   @Get(':id/fotos')
-  listPhotos(@Param('id', ParseIntPipe) id: number): Promise<string[]> {
+  listPhotos(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<string[]> {
     return this.pessoasService.listPhotos(id);
   }
 
-  /** GET /pessoas/:id/fotos/latest */
+  /** Retorna URL da foto mais recente */
   @Get(':id/fotos/latest')
-  async latestPhoto(@Param('id', ParseIntPipe) id: number): Promise<{ path: string }> {
-    const path = await this.pessoasService.getLatestPhoto(id);
-    if (!path) throw new NotFoundException('Nenhuma foto encontrada');
-    return { path };
+  latestPhoto(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<{ path: string }> {
+    return this.pessoasService.getLatestPhoto(id)
+      .then(path => {
+        if (!path) throw new NotFoundException('Nenhuma foto encontrada');
+        return { path };
+      });
   }
 }
-  

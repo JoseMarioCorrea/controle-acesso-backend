@@ -10,11 +10,11 @@ import { VisitorsController } from '../visitors/visitors.controller';
 import { VisitorModule } from 'src/visitors/visitors.module';
 import { Visitante } from 'src/visitors/visitor.entity';
 import { Terminal } from 'src/terminals/terminal.entity';
-import { Department } from '../departments/department.entity';
+import { Departament } from '../departments/department.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Pessoa, Grupo, Terminal, Department]),
+    TypeOrmModule.forFeature([Pessoa, Grupo, Terminal, Departament]),
     IdfaceModule, // ← importa o módulo do iDFace
   ],
   providers: [PessoasService],

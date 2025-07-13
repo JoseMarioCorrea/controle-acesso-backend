@@ -5,15 +5,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { dirname, join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { UsersModule } from './users/users.module';
 import { DepartmentsModule } from './departments/departments.module';
-import { SchedulesModule } from './schedules/schedules.module';
-import { HolidaysModule } from './holidays/holidays.module';
-import { AlarmsModule } from './alarms/alarms.module';
-import { ReportsModule } from './reports/reports.module';
-import { SystemModule } from './system/system.module';
-import { NetworkModule } from './network/network.module';
-import { AuthModule } from './auth/auth.module';
+import { AuthModule } from './auth/auth.modulle';
 import { IdfaceModule } from './devices/idface.module'; 
 import { PessoaModule } from './pessoa/pessoa.module';
 import { LicenseModule } from './license/license.module';
@@ -44,14 +37,7 @@ import './polyfill';
     }),
 
     /*  módulos da aplicação */
-    UsersModule,
     DepartmentsModule,
-    SchedulesModule,
-    HolidaysModule,
-    AlarmsModule,
-    ReportsModule,
-    SystemModule,
-    NetworkModule,
     AuthModule,
     IdfaceModule,
     PessoaModule,

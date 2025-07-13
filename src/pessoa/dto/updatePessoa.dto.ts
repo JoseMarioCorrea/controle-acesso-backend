@@ -18,14 +18,4 @@ export class UpdatePessoaDto extends PartialType(CreatePessoaDto) {
   @IsInt({ each: true, message: 'Cada grupo deve ser um inteiro' })
   @Type(() => Number)
   readonly grupos?: number[];
-
-  @IsOptional()
-  @IsInt({ message: 'userIdIdface deve ser um número inteiro' })
-  @Type(() => Number)
-  readonly userIdIdface?: number;
-
-  @IsOptional()
-  @IsInt({ message: 'terminalId deve ser um número inteiro' })
-  @Type(() => Number)
-  readonly terminalId?: any;
 }
