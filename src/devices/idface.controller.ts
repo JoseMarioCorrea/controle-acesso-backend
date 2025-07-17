@@ -23,7 +23,11 @@ import { UpdateDeviceDto } from './dto/updateDevice.dto';
 import { Device } from './idaface.entity';
 
 @Controller('idface')
-@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+@UsePipes(new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+}))
 export class IdfaceController {
   constructor(private readonly idface: IdfaceService) { }
 
@@ -55,7 +59,7 @@ export class IdfaceController {
   remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     return this.idface.deleteDevice(id);
   }
-  
+
   /**
    * Cria vários usuários no device
    */

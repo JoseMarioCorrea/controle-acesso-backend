@@ -10,6 +10,8 @@ import {
   ParseIntPipe,
   HttpCode,
   HttpStatus,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -20,6 +22,14 @@ import { CreateGrupoDto } from '../groups/dto/create-grupo.dto';
 import { Grupo } from '../groups/grupo.entity';
 import { Departament } from './department.entity';
 
+
+@UsePipes(new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  transform: true,
+}))
+
+
 @Controller('departments')
 export class DepartmentsController {
   constructor(
@@ -28,7 +38,7 @@ export class DepartmentsController {
     private readonly deptRepo: Repository<Departament>,
     @InjectRepository(Grupo)
     private readonly grupoRepo: Repository<Grupo>,
-  ) {}
+  ) { }
 
   @Get()
   findAll() {

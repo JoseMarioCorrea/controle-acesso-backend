@@ -7,19 +7,26 @@ export class Device {
   @PrimaryGeneratedColumn()
   id: number;
 
+  // coluna no BD = nome
+  @Column({ name: 'nome', length: 100 })
+  name: string;
+
   @Column({ length: 100 })
-  nome: string;
+  model: string;
 
   @Column({ length: 45 })
   ip: string;
 
   @Column('int')
   port: number;
-  
-  @ManyToOne(() => Departament, dept => dept.devices, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'departmentId' })
-  department: Departament;
 
-  @Column()
-  departmentId: number;
+  @ManyToOne(() => Departament, d => d.devices, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'departmentId' }) // coluna existente na tabela idface
+  department?: Departament | null;
+
+  @Column({ nullable: true })
+  departmentId?: number | null;
 }

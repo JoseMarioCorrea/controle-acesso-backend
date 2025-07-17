@@ -18,4 +18,8 @@ export class CreateDeviceDto {
   @IsInt()
   @Min(1)
   port: number;
+
+  @IsInt()
+  @Min(1) // opcional, se usado
+  departmentId?: number; // vincula a um departamento, se necessário  
 }

@@ -17,3 +17,6 @@ export class Departament {
   @OneToMany(() => Device, device => device.department)
   devices: Device[];
 }
+
+
+//Continuar daqui

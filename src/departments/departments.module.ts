@@ -6,6 +6,7 @@ import { Visitante } from '../visitors/visitor.entity';
 import { DepartmentsService } from './departments.service';
 import { DepartmentsController } from './departments.controller';
 import { Grupo } from '../groups/grupo.entity';
+import { Device } from 'src/devices/idaface.entity';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { Grupo } from '../groups/grupo.entity';
       Departament, // já existia
       Visitante, // e este
       Grupo,
+      Device, // e este também
     ]),
   ],
   controllers: [DepartmentsController],
