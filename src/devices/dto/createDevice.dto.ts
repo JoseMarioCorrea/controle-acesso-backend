@@ -1,5 +1,5 @@
 // src/devices/dto/create-device.dto.ts
-import { IsNotEmpty, IsString, IsIP, IsInt, Min } from 'class-validator';
+import { IsNotEmpty, IsString, IsIP, IsInt, Min, IsOptional } from 'class-validator';
 
 export class CreateDeviceDto {
   @IsNotEmpty() 
@@ -20,6 +20,7 @@ export class CreateDeviceDto {
   port: number;
 
   @IsInt()
+  @IsOptional()
   @Min(1) // opcional, se usado
   departmentId?: number; // vincula a um departamento, se necessário  
 }

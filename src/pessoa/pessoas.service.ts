@@ -1,19 +1,31 @@
 // src/pessoa/pessoas.service.ts
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Pessoa } from './pessoa.entity';
 import { CreatePessoaDto } from './dto/createPessoa.dto';
 import { UpdatePessoaDto } from './dto/updatePessoa.dto';
 import { Grupo } from '../groups/grupo.entity';
 import { Departament } from '../departments/department.entity';
-import { join, dirname } from 'path';
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  copyFileSync,
+  readdirSync,
+} from 'fs';
 
-function getBaseDir(): string {
-  const runningInPkg = typeof (process as any).pkg !== 'undefined';
-  return runningInPkg ? dirname(process.execPath) : join(__dirname, '..');
-}
+// <<< helpers centralizados de caminho de upload >>>
+import {
+  getUploadsPath,
+  getUploadsPublicUrl,
+} from '../common/uploads-path.util';
 
 @Injectable()
 export class PessoasService {
@@ -28,82 +40,111 @@ export class PessoasService {
     private readonly deptRepo: Repository<Departament>,
   ) {}
 
-  /**
-   * Cria pessoa e associa foto, departamento e grupos (base).
-   */
+  /* ==================================================================
+   * CREATE (base)
+   *  - valida dept
+   *  - cria Pessoa
+   *  - associa grupos (se vierem)
+   *  - salva
+   *  OBS: foto NÃO é gravada aqui (use POST /pessoas/:id/fotos)
+   * ==================================================================*/
   async createBase(
     dto: CreatePessoaDto,
-    fotoFilename?: string
+    _fotoFilename?: string, // ignorado: upload separado
   ): Promise<Pessoa> {
     const { grupos, departmentId, ...rest } = dto;
 
-    // Valida departamento
+    // valida dept
     const dept = await this.deptRepo.findOne({ where: { id: departmentId } });
     if (!dept) {
-      throw new BadRequestException(`Departamento ${departmentId} não encontrado`);
+      throw new BadRequestException(
+        `Departamento ${departmentId} não encontrado`,
+      );
     }
 
-    const pessoa = this.repo.create({ ...rest, department: dept, fotoFilename });
+    // cria entidade
+    const pessoa = this.repo.create({
+      ...rest,
+      department: dept,
+    }) as Pessoa;
 
-    // Associa grupos, se houver
-    if (grupos?.length) {
-      pessoa.grupos = await this.grupoRepo.findByIds(grupos);
+    // associa grupos
+    if (Array.isArray(grupos) && grupos.length) {
+      const entidades = await this.grupoRepo.find({
+        where: { id: In(grupos) },
+      });
+      if (entidades.length !== grupos.length) {
+        throw new BadRequestException(
+          `Algum grupo informado não foi encontrado. Esperados=${grupos.length} obtidos=${entidades.length}`,
+        );
+      }
+      pessoa.grupos = entidades;
     }
 
     const saved = await this.repo.save(pessoa);
-    this.logger.log(`✔ Pessoa criada no DB com id=${saved.id}`);
-    return saved;
+    this.logger.log(`✔ Pessoa criada no DB id=${saved.id}`);
+    return this.findById(saved.id); // retorna com relações
   }
 
-  /**
-   * Atualiza pessoa e foto, departamento e grupos (base).
-   */
+  /* ==================================================================
+   * UPDATE (base)
+   *  - atualiza dados
+   *  - (re)associa dept/grupos se fornecidos
+   *  - fotoFilename NÃO é manipulado aqui (upload separado)
+   * ==================================================================*/
   async updateBase(
     id: string,
     dto: UpdatePessoaDto,
-    fotoFilename?: string
+    _fotoFilename?: string, // ignorado
   ): Promise<Pessoa> {
     const { grupos, departmentId, ...rest } = dto;
 
-    const pessoa = await this.repo.preload({ id, ...rest });
+    // carrega com relações
+    const pessoa = await this.repo.findOne({
+      where: { id },
+      relations: ['department', 'grupos'],
+    });
     if (!pessoa) {
       throw new NotFoundException(`Pessoa ${id} não encontrada`);
     }
 
-    // Atualiza departamento, se fornecido
+    // aplica campos simples
+    Object.assign(pessoa, rest);
+
+    // dept?
     if (departmentId !== undefined) {
       const dept = await this.deptRepo.findOne({ where: { id: departmentId } });
       if (!dept) {
-        throw new BadRequestException(`Departamento ${departmentId} não encontrado`);
+        throw new BadRequestException(
+          `Departamento ${departmentId} não encontrado`,
+        );
       }
       pessoa.department = dept;
     }
 
-    // Atualiza grupos, se fornecido
-    if (grupos) {
-      pessoa.grupos = await this.grupoRepo.findByIds(grupos);
-    }
-
-    // Atualiza foto
-    if (fotoFilename) {
-      pessoa.fotoFilename = fotoFilename;
+    // grupos?
+    if (Array.isArray(grupos)) {
+      const entidades = await this.grupoRepo.find({
+        where: { id: In(grupos) },
+      });
+      if (entidades.length !== grupos.length) {
+        throw new BadRequestException('Algum grupo informado não foi encontrado');
+      }
+      pessoa.grupos = entidades;
     }
 
     const saved = await this.repo.save(pessoa);
     this.logger.log(`✔ Pessoa ${id} atualizada no DB`);
-    return saved;
+    return this.findById(saved.id);
   }
 
-  /**
-   * Lista todas as pessoas com departamentos e grupos.
-   */
+  /* ==================================================================
+   * FIND all / one
+   * ==================================================================*/
   async findAll(): Promise<Pessoa[]> {
     return this.repo.find({ relations: ['department', 'grupos'] });
   }
 
-  /**
-   * Busca pessoa pelo ID.
-   */
   async findById(id: string): Promise<Pessoa> {
     const pessoa = await this.repo.findOne({
       where: { id },
@@ -115,9 +156,9 @@ export class PessoasService {
     return pessoa;
   }
 
-  /**
-   * Remove pessoa do banco (base).
-   */
+  /* ==================================================================
+   * REMOVE (base)
+   * ==================================================================*/
   async removeBase(id: string): Promise<void> {
     const pessoa = await this.repo.findOne({ where: { id } });
     if (!pessoa) {
@@ -128,15 +169,13 @@ export class PessoasService {
     this.logger.log(`✔ Pessoa ${id} removida do DB`);
   }
 
-  /**
-   * Salva foto no disco e retorna URL pública.
-   */
-  async savePhoto(
-    userId: string,
-    file: Express.Multer.File,
-  ): Promise<string> {
-    const baseDir = getBaseDir();
-    const dir = join(baseDir, 'uploads', 'pessoas', userId);
+  /* ==================================================================
+   * FOTOS
+   *  - salva no disco e retorna URL pública (/uploads/pessoas/:id/...)
+   *  - usa helpers compartilhados (não grava em dist/)
+   * ==================================================================*/
+  async savePhoto(userId: string, file: Express.Multer.File): Promise<string> {
+    const dir = getUploadsPath('pessoas', userId);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
     const filename = `${Date.now()}-${file.originalname}`;
@@ -150,22 +189,18 @@ export class PessoasService {
       throw new BadRequestException('Arquivo de foto inválido');
     }
 
-    return `/uploads/pessoas/${userId}/${filename}`;
+    this.logger.log(`✔ Foto salva para pessoa=${userId}, arquivo=${filename}`);
+    return getUploadsPublicUrl('pessoas', userId, filename);
   }
 
-  /**
-   * Retorna todas as URLs de fotos do usuário.
-   */
   async listPhotos(userId: string): Promise<string[]> {
-    const baseDir = getBaseDir();
-    const dir = join(baseDir, 'uploads', 'pessoas', userId);
+    const dir = getUploadsPath('pessoas', userId);
     if (!existsSync(dir)) return [];
-    return readdirSync(dir).map(f => `/uploads/pessoas/${userId}/${f}`);
+    return readdirSync(dir).map(f =>
+      getUploadsPublicUrl('pessoas', userId, f),
+    );
   }
 
-  /**
-   * Retorna a URL da foto mais recente.
-   */
   async getLatestPhoto(userId: string): Promise<string> {
     const paths = await this.listPhotos(userId);
     if (!paths.length) return '';

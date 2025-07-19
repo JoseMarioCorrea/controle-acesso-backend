@@ -7,10 +7,19 @@ import {
   IsArray,
   ArrayUnique,
   IsInt,
+  IsEmail,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+/**
+ * DTO de criação de Pessoa (cadastro base).
+ * Atenção: o ValidationPipe global usa whitelist+forbidNonWhitelisted,
+ * portanto só envie campos que constam aqui ou ocorrerá 400.
+ */
 export class CreatePessoaDto {
+  /* -------------------------------------------------------------- */
+  /* Campos básicos                                                 */
+  /* -------------------------------------------------------------- */
   @IsNotEmpty()
   @IsString()
   nome: string;
@@ -19,10 +28,19 @@ export class CreatePessoaDto {
   @IsString()
   matricula?: string;
 
+  /**
+   * Departamento ao qual a pessoa pertence (obrigatório).
+   * ID numérico (FK para departments.id).
+   */
   @IsNotEmpty()
   @Type(() => Number)
   @IsInt()
-  departmentId?: number;
+  departmentId: number;              // <- agora sem "?" para refletir obrigatoriedade
+
+  /* Documento ----------------------------------------------------- */
+  @IsOptional()
+  @IsString()
+  documentType?: string;            // 'RG' | 'CPF' ou outro
 
   @IsOptional()
   @IsString()
@@ -32,14 +50,16 @@ export class CreatePessoaDto {
   @IsString()
   cpf?: string;
 
+  /* Contato ------------------------------------------------------- */
   @IsOptional()
-  @IsString()
+  @IsEmail()
   email?: string;
 
   @IsOptional()
   @IsString()
-  telefone?: string;
+  telefone?: string;                 // se front envia "phone", mapear no controller
 
+  /* Credenciais (se usado) ---------------------------------------- */
   @IsOptional()
   @IsString()
   senha?: string;
@@ -48,11 +68,20 @@ export class CreatePessoaDto {
   @IsString()
   confirmarSenha?: string;
 
+  /* Observações --------------------------------------------------- */
   @IsOptional()
   @IsString()
   observacoes?: string;
 
-  /** IDs dos grupos (ManyToMany) */
+  /* Vigência / validade de acesso -------------------------------- */
+  @IsOptional()
+  @IsString()
+  shelfLifeDate?: string;            // 'YYYY-MM-DD'; será convertido no service se necessário
+
+  /* -------------------------------------------------------------- */
+  /* Relacionamentos                                                */
+  /* -------------------------------------------------------------- */
+  /** IDs dos grupos (ManyToMany). Opcional no cadastro. */
   @IsOptional()
   @IsArray()
   @ArrayUnique()
@@ -60,6 +89,9 @@ export class CreatePessoaDto {
   @IsInt({ each: true })
   grupos?: number[];
 
+  /* -------------------------------------------------------------- */
+  /* Flags                                                          */
+  /* -------------------------------------------------------------- */
   @IsOptional()
   @Type(() => Boolean)
   @IsBoolean()
@@ -74,8 +106,4 @@ export class CreatePessoaDto {
   @Type(() => Boolean)
   @IsBoolean()
   listaExcecao?: boolean;
-
-  @IsOptional()
-  @IsString()
-  situacao?: string;
 }

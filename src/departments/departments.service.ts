@@ -25,38 +25,33 @@ export class DepartmentsService {
   async create(dto: CreateDepartmentDto): Promise<Departament> {
     const { deviceId, ...rest } = dto;
 
-    // 1) cria dept
+    // 1) departamento
     const dept = this.deptRepo.create(rest);
     await this.deptRepo.save(dept);
 
-    // 2) vincula device (se informado)
+    // 2) vincula device (se houver)
     if (deviceId) {
-      const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
-      if (device) {
-        device.departmentId = dept.id;  // ou device.department = dept;
-        await this.deviceRepo.save(device);
-      } else {
-        // opcional: lançar erro
-        // throw new NotFoundException(`Device ${deviceId} não encontrado`);
-        console.warn(`Device ${deviceId} não encontrado; dept ${dept.id} criado sem terminal.`);
-      }
+      await this.deviceRepo.update(deviceId, { departmentId: dept.id });
     }
 
-    // 3) cria grupo padrão
-    const grupo = this.grupoRepo.create({
-      nome: `Grupo ${dept.nome}`,
-      descricao: `Grupo padrão para o departamento ${dept.nome}`,
-      department: dept,
-    } as any);
-    await this.grupoRepo.save(grupo);
+    // 3) grupo padrão tipo 3
+    await this.grupoRepo.save(
+      this.grupoRepo.create({
+        nome: `Grupo ${dept.nome}`,
+        descricao: `Grupo padrão para o departamento ${dept.nome}`,
+        department: dept,
+      } as any),
+    );
 
     return dept;
   }
+
   /* ------------------------------------------------------------------
    * FIND – listagem formatada ou registro único
    * -----------------------------------------------------------------*/
   async findAll() {
     const depts = await this.deptRepo.find({ relations: ['devices'] });
+
     return depts.map(d => ({
       id: d.id,
       nome: d.nome,
@@ -73,40 +68,60 @@ export class DepartmentsService {
   /* ------------------------------------------------------------------
    * UPDATE – atualiza dados e (re)associa device
    * -----------------------------------------------------------------*/
-  /* update */
   async update(id: number, dto: UpdateDepartmentDto): Promise<Departament> {
-    const dept = await this.deptRepo.findOne({ where: { id } });
+    const dept = await this.deptRepo.findOne({ where: { id }, relations: ['devices'] });
     if (!dept) throw new NotFoundException('Departamento não encontrado');
 
     const { deviceId, ...rest } = dto;
+
+    // 1) dados básicos
     Object.assign(dept, rest);
     await this.deptRepo.save(dept);
 
-    // (re) associação de device
-    if (deviceId) {
-      const device = await this.deviceRepo.findOneByOrFail({ id: deviceId });
-      device.department = dept;          // seta a ENTIDADE
-      await this.deviceRepo.save(device); // salva FK automaticamente
+    // 2) (re)associação de device
+    if (deviceId !== undefined) {
+      // desvincula todos os devices atuais do depto → SET NULL
+      await this.deviceRepo.update({ departmentId: id }, { departmentId: null });
+
+      // vincula novo, se informado
+      if (deviceId) {
+        await this.deviceRepo.update(deviceId, { departmentId: id });
+      }
     }
+
     return this.findOne(id);
   }
 
+  /* ------------------------------------------------------------------
+   * REMOVE – exclui departamento e limpa vínculo dos devices
+   * -----------------------------------------------------------------*/
+
   async remove(id: number): Promise<void> {
-    const dept = await this.deptRepo.findOne({
-      where: { id },
-      relations: ['devices'],
-    });
+    // 1) verifica existência
+    const dept = await this.deptRepo.findOne({ where: { id } });
     if (!dept) throw new NotFoundException('Departamento não encontrado');
 
-    /* 1) desassocia todos os devices que apontam para o depto */
-    await this.deviceRepo.update(
-      { department: { id } },   // critério
-      { department: {} },     // solta FK
-    );
+    /* ---------------------------------------------------------------
+     * 2) DESVINCULA / REMOVE RELAÇÕES QUE APONTAM PARA O DEPARTAMENTO
+     *    (ordem importa para não violar FK)
+     * -------------------------------------------------------------*/
 
-    /* 2) remove o departamento */
+    // a) solta devices → departmentId = NULL
+    await this.deviceRepo.update({ departmentId: id }, { departmentId: null });
+
+    // b) apaga grupos ligados (join-tables têm ON DELETE CASCADE)
+    await this.grupoRepo.delete({ department: { id } });
+
+    // c) se Visitor ou Pessoa possuírem FK não-nula, solte aqui:
+    //    await this.visitorRepo.update({ departmentId: id }, { departmentId: null });
+    //    await this.pessoaRepo .update({ departmentId: id }, { departmentId: null });
+
+    /* ---------------------------------------------------------------
+     * 3) agora é seguro remover o departamento
+     * -------------------------------------------------------------*/
     await this.deptRepo.remove(dept);
   }
+
 
   /* ------------------------------------------------------------------
    * GROUPS deste departamento

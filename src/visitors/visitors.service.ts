@@ -19,11 +19,11 @@ import {
   copyFileSync,
   readdirSync,
 } from 'fs';
+import {
+  getUploadsPath,
+  getUploadsPublicUrl,
+} from '../common/uploads-path.util';  // <--- NOVO
 
-function getBaseDir(): string {
-  const runningInPkg = typeof (process as any).pkg !== 'undefined';
-  return runningInPkg ? dirname(process.execPath) : join(__dirname, '..');
-}
 
 @Injectable()
 export class VisitorsService {
@@ -134,14 +134,14 @@ export class VisitorsService {
   }
 
   /**
-   * Salva foto no disco e retorna URL pública.
-   */
+    * Salva foto no disco e retorna URL pública.
+    */
   async savePhoto(
     visitorId: number,
     file: Express.Multer.File,
   ): Promise<string> {
-    const baseDir = getBaseDir();
-    const dir = join(baseDir, 'uploads', 'visitors', String(visitorId));
+    // Diretório físico
+    const dir = getUploadsPath('visitors', String(visitorId));
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
     const filename = `${Date.now()}-${file.originalname}`;
@@ -158,18 +158,19 @@ export class VisitorsService {
     this.logger.log(
       `✔ Foto salva para visitante=${visitorId}, arquivo=${filename}`,
     );
-    return `/uploads/visitors/${visitorId}/${filename}`;
+
+    // Caminho público (para front)
+    return getUploadsPublicUrl('visitors', String(visitorId), filename);
   }
 
   /**
    * Lista todas as URLs de fotos do visitante.
    */
   async listPhotos(visitorId: number): Promise<string[]> {
-    const baseDir = getBaseDir();
-    const dir = join(baseDir, 'uploads', 'visitors', String(visitorId));
+    const dir = getUploadsPath('visitors', String(visitorId));
     if (!existsSync(dir)) return [];
-    return readdirSync(dir).map(
-      (f) => `/uploads/visitors/${visitorId}/${f}`,
+    return readdirSync(dir).map(f =>
+      getUploadsPublicUrl('visitors', String(visitorId), f),
     );
   }
 
@@ -179,6 +180,7 @@ export class VisitorsService {
   async getLatestPhoto(visitorId: number): Promise<string> {
     const paths = await this.listPhotos(visitorId);
     if (!paths.length) return '';
+    // ordena decrescente por nome; se quiser por mtime, use fs.statSync
     paths.sort().reverse();
     return paths[0];
   }

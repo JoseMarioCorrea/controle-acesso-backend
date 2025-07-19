@@ -25,16 +25,10 @@ import { Pessoa } from './pessoa.entity';
 export class PessoasController {
   constructor(private readonly pessoasService: PessoasService) {}
 
-  /**
-   * Cria pessoa (base) sem integração síncrona
-   */
+  /** Cria pessoa (base) */
   @Post()
-  @UseInterceptors(FileInterceptor('foto'))
-  create(
-    @Body() dto: CreatePessoaDto,
-    @UploadedFile() foto?: Express.Multer.File,
-  ): Promise<Pessoa> {
-    return this.pessoasService.createBase(dto, foto?.filename);
+  create(@Body() dto: CreatePessoaDto): Promise<Pessoa> {
+    return this.pessoasService.createBase(dto);
   }
 
   /** Lista todas as pessoas com depto e grupos */
@@ -45,59 +39,49 @@ export class PessoasController {
 
   /** Busca pessoa por ID */
   @Get(':id')
-  findById(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<Pessoa> {
+  findById(@Param('id', ParseUUIDPipe) id: string): Promise<Pessoa> {
     return this.pessoasService.findById(id);
   }
 
-  /** Atualiza pessoa (base) sem integração síncrona */
+  /** Atualiza pessoa (base) */
   @Put(':id')
-  @UseInterceptors(FileInterceptor('foto'))
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePessoaDto,
-    @UploadedFile() foto?: Express.Multer.File,
   ): Promise<Pessoa> {
-    return this.pessoasService.updateBase(id, dto, foto?.filename);
+    return this.pessoasService.updateBase(id, dto);
   }
 
   /** Remove pessoa (base) */
   @Delete(':id')
-  remove(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<void> {
+  remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.pessoasService.removeBase(id);
   }
 
   /** Upload de foto */
   @Post(':id/fotos')
-  @UseInterceptors(FileInterceptor('foto'))
-  uploadPhoto(
+  @UseInterceptors(FileInterceptor('foto')) // aqui sim processamos upload
+  async uploadPhoto(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() foto: Express.Multer.File,
   ): Promise<{ path: string }> {
-    return this.pessoasService.savePhoto(id, foto)
-      .then(path => ({ path }));
+    const path = await this.pessoasService.savePhoto(id, foto);
+    return { path };
   }
 
   /** Lista URLs de todas as fotos */
   @Get(':id/fotos')
-  listPhotos(
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<string[]> {
+  listPhotos(@Param('id', ParseUUIDPipe) id: string): Promise<string[]> {
     return this.pessoasService.listPhotos(id);
   }
 
   /** Retorna URL da foto mais recente */
   @Get(':id/fotos/latest')
-  latestPhoto(
+  async latestPhoto(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ path: string }> {
-    return this.pessoasService.getLatestPhoto(id)
-      .then(path => {
-        if (!path) throw new NotFoundException('Nenhuma foto encontrada');
-        return { path };
-      });
+    const path = await this.pessoasService.getLatestPhoto(id);
+    if (!path) throw new NotFoundException('Nenhuma foto encontrada');
+    return { path };
   }
 }
