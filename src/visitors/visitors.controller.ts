@@ -21,11 +21,12 @@ import { VisitorsService } from './visitors.service';
 import { Visitante } from './visitor.entity';
 import { CreateVisitorDto } from './dto/create-visitors.dto';
 import { UpdateVisitorDto } from './dto/update-visitor.dto';
+import { memoryStorage } from 'multer';
 
 @Controller('visitors')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class VisitorsController {
-  constructor(private readonly visitorsService: VisitorsService) {}
+  constructor(private readonly visitorsService: VisitorsService) { }
 
   /** Criar visitante (base) */
   @Post()
@@ -95,4 +96,12 @@ export class VisitorsController {
     if (!path) throw new NotFoundException('Nenhuma foto encontrada');
     return { path };
   }
+
+  @Post(':id/fotos')
+  @UseInterceptors(FileInterceptor('foto', { storage: memoryStorage() }))
+  async uploadFoto(@Param('id', ParseIntPipe) id: number, @UploadedFile() file: Express.Multer.File) {
+    const path = await this.visitorsService.savePhoto(id, file);
+    return { path };
+  }
+
 }

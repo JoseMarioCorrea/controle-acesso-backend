@@ -13,6 +13,7 @@ import { LicenseModule } from './license/license.module';
 import { TerminalsModule } from './terminals/terminals.module';
 import { VisitorModule } from './visitors/visitors.module';
 import './polyfill';
+import { SyncModule } from './sync/sync.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import './polyfill';
     LicenseModule,
     TerminalsModule,
     VisitorModule,
+    SyncModule
   ],
   controllers: [AppController],
   providers: [AppService],

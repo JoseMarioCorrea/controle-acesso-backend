@@ -143,4 +143,34 @@ export class IdfaceController {
   ) {
     return this.idface.liberarAcesso(deviceId, userId);
   }
+
+  @Post('test-connection')
+  async testConnection(@Body() body: { host: string; port: number }) {
+    // Aqui você pode tentar abrir uma conexão HTTP simples
+    // ou usar axios para chamar /login.fcgi (sem credenciais reais)
+    const { host, port } = body;
+    try {
+      const url = `http://${host}:${port}/login.fcgi`;
+      // timeout curto:
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 4000);
+      const resp = await fetch(url, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login: 'x', password: 'x' }),
+      }).catch(e => { throw e; });
+      clearTimeout(t);
+      return {
+        ok: true,
+        message: `Device respondeu HTTP ${resp.status}`,
+      };
+    } catch (e: any) {
+      return {
+        ok: false,
+        message: 'Sem resposta (timeout ou host inacessível)',
+      };
+    }
+  }
+
 }

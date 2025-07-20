@@ -9,14 +9,17 @@ import { PessoaModule } from '../pessoa/pessoa.module';
 import { IdfaceModule } from 'src/devices/idface.module';
 import { Departament } from '../departments/department.entity';
 import { Grupo } from 'src/groups/grupo.entity';
+import { SyncModule } from '../sync/sync.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Visitante, Pessoa, Departament, Grupo]),
     IdfaceModule, // caso use o service de pessoas
+    SyncModule,
+
   ],
-  controllers: [VisitorsController, ],
-  providers: [VisitorsService, ],
+  controllers: [VisitorsController,],
+  providers: [VisitorsService,],
   exports: [VisitorsService], // se outro módulo precisar
 })
-export class VisitorModule {}
+export class VisitorModule { }

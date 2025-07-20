@@ -8,12 +8,14 @@ import { Terminal } from 'src/terminals/terminal.entity';
 import { TerminalsModule } from 'src/terminals/terminals.module';
 import { Device } from './idaface.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { SyncModule } from '../sync/sync.module';
 
 @Module({
   imports: [
     ConfigModule,
     TerminalsModule, // para pegar IDFACE_BASE_URL e DEVICE_ID do .env
     Terminal,
+    SyncModule,
     TypeOrmModule.forFeature([Device]),
     HttpModule.registerAsync({
       imports: [ConfigModule],

@@ -4,7 +4,7 @@
   "private": true,
   "bin": "dist/bundle.js",
   "scripts": {
-    "clean": "rimraf dist release",
+    "clean": "rimraf node_modules dist",
     "build": "nest build",
     "bundle": "esbuild dist/main.js --bundle --platform=node --target=node18 --format=cjs --outfile=dist/bundle.js --external:sqlite3 --external:cors --external:@nestjs/websockets/socket-module --external:@nestjs/microservices/microservices-module --external:@nestjs/microservices --external:class-transformer/storage",
     "pkg:win": "npm run clean && npm run build && npm run bundle && pkg dist/bundle.js --targets node18-win-x64 --output release\\backend\\ControleAcesso.exe",
@@ -30,6 +30,7 @@
     ]
   },
   "dependencies": {
+    "@angular-devkit/schematics-cli": "^20.1.1",
     "@chakra-ui/icons": "^2.2.4",
     "@chakra-ui/stat": "^2.1.1",
     "@nestjs/axios": "^4.0.0",
