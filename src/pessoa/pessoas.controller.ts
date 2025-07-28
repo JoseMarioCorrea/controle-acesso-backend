@@ -7,6 +7,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseInterceptors,
   UploadedFile,
   UsePipes,
@@ -23,27 +24,37 @@ import { Pessoa } from './pessoa.entity';
 @Controller('pessoas')
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class PessoasController {
-  constructor(private readonly pessoasService: PessoasService) {}
+  constructor(private readonly pessoasService: PessoasService) { }
 
-  /** Cria pessoa (base) */
+  /* -------------------------------------------------------------- */
+  /* CREATE                                                         */
+  /* -------------------------------------------------------------- */
   @Post()
   create(@Body() dto: CreatePessoaDto): Promise<Pessoa> {
     return this.pessoasService.createBase(dto);
   }
 
-  /** Lista todas as pessoas com depto e grupos */
+  /* -------------------------------------------------------------- */
+  /* LIST  ( ?visitante=true|false )                                */
+  /* -------------------------------------------------------------- */
   @Get()
-  findAll(): Promise<Pessoa[]> {
-    return this.pessoasService.findAll();
+  findAll(@Query('visitante') visitante?: 'true' | 'false'): Promise<Pessoa[]> {
+    const flag =
+      visitante === undefined ? undefined : visitante === 'true';
+    return this.pessoasService.findAll(flag); // ← service aceita filtro opcional
   }
 
-  /** Busca pessoa por ID */
+  /* -------------------------------------------------------------- */
+  /* GET BY ID                                                      */
+  /* -------------------------------------------------------------- */
   @Get(':id')
   findById(@Param('id', ParseUUIDPipe) id: string): Promise<Pessoa> {
     return this.pessoasService.findById(id);
   }
 
-  /** Atualiza pessoa (base) */
+  /* -------------------------------------------------------------- */
+  /* UPDATE                                                         */
+  /* -------------------------------------------------------------- */
   @Put(':id')
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -52,15 +63,19 @@ export class PessoasController {
     return this.pessoasService.updateBase(id, dto);
   }
 
-  /** Remove pessoa (base) */
+  /* -------------------------------------------------------------- */
+  /* DELETE                                                         */
+  /* -------------------------------------------------------------- */
   @Delete(':id')
   remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.pessoasService.removeBase(id);
   }
 
-  /** Upload de foto */
+  /* -------------------------------------------------------------- */
+  /* PHOTO UPLOAD / LIST / LATEST                                   */
+  /* -------------------------------------------------------------- */
   @Post(':id/fotos')
-  @UseInterceptors(FileInterceptor('foto')) // aqui sim processamos upload
+  @UseInterceptors(FileInterceptor('foto'))
   async uploadPhoto(
     @Param('id', ParseUUIDPipe) id: string,
     @UploadedFile() foto: Express.Multer.File,
@@ -69,13 +84,11 @@ export class PessoasController {
     return { path };
   }
 
-  /** Lista URLs de todas as fotos */
   @Get(':id/fotos')
   listPhotos(@Param('id', ParseUUIDPipe) id: string): Promise<string[]> {
     return this.pessoasService.listPhotos(id);
   }
 
-  /** Retorna URL da foto mais recente */
   @Get(':id/fotos/latest')
   async latestPhoto(
     @Param('id', ParseUUIDPipe) id: string,

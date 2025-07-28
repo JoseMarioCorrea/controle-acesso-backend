@@ -86,4 +86,7 @@ export class Pessoa {
 
   @Column({ default: false })
   listaExcecao: boolean;
+
+  @Column({ default: false })
+  visitante: boolean;
 }

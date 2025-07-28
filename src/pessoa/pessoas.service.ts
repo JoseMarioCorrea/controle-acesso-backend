@@ -14,129 +14,93 @@ import { UpdatePessoaDto } from './dto/updatePessoa.dto';
 import { Grupo } from '../groups/grupo.entity';
 import { Departament } from '../departments/department.entity';
 
-import {
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  copyFileSync,
-  readdirSync,
-} from 'fs';
+import { existsSync, mkdirSync, writeFileSync, copyFileSync, readdirSync } from 'fs';
 import { join } from 'path';
+import { getUploadsPath, getUploadsPublicUrl } from '../common/uploads-path.util';
 
-// Helpers centralizados
-import {
-  getUploadsPath,
-  getUploadsPublicUrl,
-} from '../common/uploads-path.util';
-
-// Sync
+// Sync ----------------------------------------------------------------
 import { SyncService } from '../sync/sync.service';
+import { SyncTargetType, SyncOperation } from '../sync/sync-task.entity';
+
+// Constantes de visitante ---------------------------------------------
 import {
-  SyncTargetType,
-  SyncOperation,
-} from '../sync/sync-task.entity';
+  GENERIC_VISITOR_DEPARTMENT_ID,
+  GENERIC_VISITOR_GROUP_NAME,
+  GENERIC_VISITOR_GROUP_DESC,
+} from '../common/constants';
 
 @Injectable()
 export class PessoasService {
   private readonly logger = new Logger(PessoasService.name);
 
   constructor(
-    @InjectRepository(Pessoa)
-    private readonly repo: Repository<Pessoa>,
-    @InjectRepository(Grupo)
-    private readonly grupoRepo: Repository<Grupo>,
-    @InjectRepository(Departament)
-    private readonly deptRepo: Repository<Departament>,
+    @InjectRepository(Pessoa) private readonly repo: Repository<Pessoa>,
+    @InjectRepository(Grupo) private readonly grupoRepo: Repository<Grupo>,
+    @InjectRepository(Departament) private readonly deptRepo: Repository<Departament>,
     private readonly sync: SyncService,
   ) { }
 
-  /* ==================================================================
-   * CREATE (apenas dados básicos; foto é via endpoint separado)
-   * ==================================================================*/
+  /* ===================================================================
+   * CREATE
+   * =================================================================*/
   async createBase(dto: CreatePessoaDto): Promise<Pessoa> {
-    const { grupos, departmentId, ...rest } = dto;
+    const { grupos, departmentId, visitante, ...rest } = dto;
 
-    // Departamento obrigatório
     const dept = await this.deptRepo.findOne({ where: { id: departmentId } });
-    if (!dept) {
-      throw new BadRequestException(`Departamento ${departmentId} não encontrado`);
-    }
+    if (!dept) throw new BadRequestException(`Departamento ${departmentId} não encontrado`);
 
-    // Entidade base
     const pessoa = this.repo.create({
       ...rest,
+      visitante: !!visitante,
       department: dept,
     }) as Pessoa;
 
-    // Associa grupos (se vieram)
-    if (Array.isArray(grupos) && grupos.length) {
-      const encontrados = await this.grupoRepo.find({ where: { id: In(grupos) } });
-      if (encontrados.length !== grupos.length) {
-        throw new BadRequestException(
-          `Algum grupo informado não foi encontrado. Esperados=${grupos.length} obtidos=${encontrados.length}`,
-        );
-      }
-      pessoa.grupos = encontrados;
+    const gruposEnt = await this.resolveGroupsForPessoa(!!visitante, grupos);
+    if (gruposEnt.length) {
+      pessoa.grupos = gruposEnt;
+      pessoa.department = gruposEnt[0].department; // garante coerência
     }
 
     const saved = await this.repo.save(pessoa);
-    this.logger.log(`✔ Pessoa criada no DB id=${saved.id}`);
+    this.logger.log(`✔ Pessoa criada id=${saved.id}`);
 
-    // Enfileira criação / atualização de usuário no device
-    await this.sync.createTask({
-      targetType: SyncTargetType.PESSOA,
-      targetId: saved.id,
-      operation: SyncOperation.CREATE_OR_UPDATE_USER,
-    });
     await this.sync.enqueueUnique({
       targetType: SyncTargetType.PESSOA,
       targetId: saved.id,
       operation: SyncOperation.CREATE_OR_UPDATE_USER,
-    })
+    });
 
-    // NÃO enfileira foto aqui (fotoFilename vazio). Foto será tratada no upload.
     return this.findById(saved.id);
   }
 
-  /* ==================================================================
-   * UPDATE (dados básicos e relações; foto é outro fluxo)
-   * ==================================================================*/
+  /* ===================================================================
+   * UPDATE
+   * =================================================================*/
   async updateBase(id: string, dto: UpdatePessoaDto): Promise<Pessoa> {
-    const { grupos, departmentId, ...rest } = dto;
+    const { grupos, departmentId, visitante, ...rest } = dto;
 
-    const pessoa = await this.repo.findOne({
-      where: { id },
-      relations: ['department', 'grupos'],
-    });
-    if (!pessoa) {
-      throw new NotFoundException(`Pessoa ${id} não encontrada`);
-    }
+    const pessoa = await this.repo.findOne({ where: { id }, relations: ['department', 'grupos'] });
+    if (!pessoa) throw new NotFoundException(`Pessoa ${id} não encontrada`);
 
     Object.assign(pessoa, rest);
+    if (visitante !== undefined) pessoa.visitante = !!visitante;
 
-    // Reatribui departamento (se informado)
     if (departmentId !== undefined) {
       const dept = await this.deptRepo.findOne({ where: { id: departmentId } });
-      if (!dept) {
-        throw new BadRequestException(`Departamento ${departmentId} não encontrado`);
-      }
+      if (!dept) throw new BadRequestException(`Departamento ${departmentId} não encontrado`);
       pessoa.department = dept;
     }
 
-    // Reatribui grupos (se vier array – inclusive vazio para limpar)
-    if (Array.isArray(grupos)) {
-      const encontrados = await this.grupoRepo.find({ where: { id: In(grupos) } });
-      if (encontrados.length !== grupos.length) {
-        throw new BadRequestException('Algum grupo informado não foi encontrado');
-      }
-      pessoa.grupos = encontrados;
+    if (Array.isArray(grupos) || visitante !== undefined) {
+      const gruposEnt = await this.resolveGroupsForPessoa(pessoa.visitante, grupos as number[] | undefined);
+      pessoa.grupos = gruposEnt;
+      if (gruposEnt.length) pessoa.department = gruposEnt[0].department;
     }
 
     const saved = await this.repo.save(pessoa);
-    this.logger.log(`✔ Pessoa ${id} atualizada no DB`);
+    this.logger.log(`✔ Pessoa ${id} atualizada`);
 
-    // Enfileira (ou simplesmente cria) task de sincronização de dados
-    await this.sync.createTask({
+    await this.sync.enqueueUnique({
       targetType: SyncTargetType.PESSOA,
       targetId: saved.id,
       operation: SyncOperation.CREATE_OR_UPDATE_USER,
@@ -145,57 +109,42 @@ export class PessoasService {
     return this.findById(saved.id);
   }
 
-  /* ==================================================================
+  /* ===================================================================
    * FIND
-   * ==================================================================*/
-  async findAll(): Promise<Pessoa[]> {
-    return this.repo.find({ relations: ['department', 'grupos'] });
+   * =================================================================*/
+  async findAll(visitante?: boolean): Promise<Pessoa[]> {
+    const where = visitante === undefined ? {} : { visitante };
+    return this.repo.find({ where, relations: ['department', 'grupos'] });
   }
 
   async findById(id: string): Promise<Pessoa> {
-    const pessoa = await this.repo.findOne({
-      where: { id },
-      relations: ['department', 'grupos'],
-    });
-    if (!pessoa) {
-      throw new NotFoundException(`Pessoa ${id} não encontrada`);
-    }
+    const pessoa = await this.repo.findOne({ where: { id }, relations: ['department', 'grupos'] });
+    if (!pessoa) throw new NotFoundException(`Pessoa ${id} não encontrada`);
     return pessoa;
   }
 
-  /* ==================================================================
+  /* ===================================================================
    * REMOVE
-   * ==================================================================*/
+   * =================================================================*/
   async removeBase(id: string): Promise<void> {
     const pessoa = await this.repo.findOne({ where: { id } });
     if (!pessoa) {
       this.logger.warn(`⚠ Pessoa ${id} não existe (remoção idempotente)`);
-      // Mesmo assim podemos enfileirar DELETE_USER para limpar mapping se houver
-      await this.sync.createTask({
-        targetType: SyncTargetType.PESSOA,
-        targetId: id,
-        operation: SyncOperation.DELETE_USER,
-      });
-      return;
+    } else {
+      await this.repo.remove(pessoa);
+      this.logger.log(`✔ Pessoa ${id} removida`);
     }
 
-    await this.repo.remove(pessoa);
-    this.logger.log(`✔ Pessoa ${id} removida do DB`);
-
-    // Enfileira remoção do usuário no device (idempotente se já não existir)
-    await this.sync.createTask({
+    await this.sync.enqueueUnique({
       targetType: SyncTargetType.PESSOA,
       targetId: id,
       operation: SyncOperation.DELETE_USER,
     });
   }
 
-  /* ==================================================================
+  /* ===================================================================
    * FOTOS
-   * - Salva arquivo
-   * - Persiste nome (fotoFilename)
-   * - Enfileira TEST_PHOTO (o SyncService cuida de mapping / upload)
-   * ==================================================================*/
+   * =================================================================*/
   async savePhoto(userId: string, file: Express.Multer.File): Promise<string> {
     const dir = getUploadsPath('pessoas', userId);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
@@ -207,12 +156,9 @@ export class PessoasService {
     else if (file.path) copyFileSync(file.path, dest);
     else throw new BadRequestException('Arquivo de foto inválido');
 
-    // Atualiza entidade com nome do arquivo (persistir!)
     await this.repo.update(userId, { fotoFilename: filename });
+    this.logger.log(`✔ Foto salva pessoa=${userId} file=${filename}`);
 
-    this.logger.log(`✔ Foto salva (persistida) pessoa=${userId} file=${filename}`);
-
-    // Agenda TEST_PHOTO (vai acionar UPLOAD depois)
     await this.sync.enqueueUnique({
       targetType: SyncTargetType.PESSOA,
       targetId: userId,
@@ -221,7 +167,6 @@ export class PessoasService {
 
     return getUploadsPublicUrl('pessoas', userId, filename);
   }
-
 
   async listPhotos(userId: string): Promise<string[]> {
     const dir = getUploadsPath('pessoas', userId);
@@ -232,8 +177,50 @@ export class PessoasService {
   async getLatestPhoto(userId: string): Promise<string> {
     const paths = await this.listPhotos(userId);
     if (!paths.length) return '';
-    // Ordena decrescente (por timestamp no prefixo) e pega a primeira
     paths.sort().reverse();
     return paths[0];
+  }
+
+  /* ===================================================================
+   * VISITANTE HELPERS
+   * =================================================================*/
+  private async getOrCreateGenericGroup(): Promise<Grupo> {
+    const deptId = GENERIC_VISITOR_DEPARTMENT_ID;
+
+    let grupo = await this.grupoRepo.findOne({
+      where: { nome: GENERIC_VISITOR_GROUP_NAME, department: { id: deptId } },
+      relations: ['department', 'department.devices'],
+    });
+
+    if (!grupo) {
+      grupo = this.grupoRepo.create({
+        nome: GENERIC_VISITOR_GROUP_NAME,
+        descricao: GENERIC_VISITOR_GROUP_DESC,
+        department: { id: deptId } as any,
+      });
+      await this.grupoRepo.save(grupo);
+      grupo = await this.grupoRepo.findOne({
+        where: { id: grupo.id },
+        relations: ['department', 'department.devices'],
+      }) as Grupo;
+    }
+
+    return grupo;
+  }
+
+  private async resolveGroupsForPessoa(visitante: boolean, gruposIds?: number[]): Promise<Grupo[]> {
+    if (visitante && (!gruposIds || !gruposIds.length)) {
+      return [await this.getOrCreateGenericGroup()];
+    }
+
+    if (Array.isArray(gruposIds) && gruposIds.length) {
+      const found = await this.grupoRepo.find({ where: { id: In(gruposIds) } });
+      if (found.length !== gruposIds.length) {
+        throw new BadRequestException('Algum grupo informado não foi encontrado');
+      }
+      return found;
+    }
+
+    return [];
   }
 }

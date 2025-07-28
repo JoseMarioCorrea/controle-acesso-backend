@@ -106,4 +106,10 @@ export class CreatePessoaDto {
   @Type(() => Boolean)
   @IsBoolean()
   listaExcecao?: boolean;
+
+  /** se true, aplica lógica de Visitante (grupo genérico etc.) */
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  visitante?: boolean;
 }
