@@ -47,6 +47,16 @@ export class IdfaceService {
   /* =========================================================
    * Infra básica
    * =======================================================*/
+  // helper no topo do IdfaceService
+  private enrichBadRequest(e: any, ctx: Record<string, any> = {}) {
+    const status = e?.response?.status ?? 400;
+    const data = e?.response?.data;
+    const message = data?.error?.message || data?.error || e?.message || 'Bad Request';
+    const err = new BadRequestException({ message, statusCode: status, details: data, ctx });
+    (err as any).__nonTransient = true;
+    return err;
+  }
+
   private async getHttp(deviceId: number) {
     const device = await this.deviceRepo.findOne({ where: { id: deviceId } });
     if (!device) {
@@ -131,35 +141,59 @@ export class IdfaceService {
     const http = await this.getHttp(deviceId);
     const url = `/create_objects.fcgi?session=${this.sessions[deviceId]}`;
     const body = { object: 'users', values: users };
-    const resp = await http.post(url, body);
-    if (!resp.data?.ids) {
-      throw new BadRequestException('Erro ao criar usuários no device');
+    // createUsersBatch
+    try {
+      const resp = await http.post(url, body);
+      if (!resp.data?.ids) throw new BadRequestException('Erro ao criar usuários no device');
+      this.logger.log({ msg: 'idface.create_users.ok', deviceId, count: resp.data.ids.length });
+      return resp.data.ids as number[];
+    } catch (e: any) {
+      if (e?.response?.status === 400) throw this.enrichBadRequest(e, { op: 'create_users', deviceId, usersCount: users.length });
+      throw e;
     }
-    this.logger.log(
-      `✔ Batch criado: ${resp.data.ids.length} users on device ${deviceId}`,
-    );
-    return resp.data.ids as number[];
   }
-
-  async updateUsersBatch(
+  // ✅ novo helper genérico p/ modify_objects
+  private async modifyObjects(
     deviceId: number,
-    updates: UpdateUserBatchItem[],
+    object: string,
+    values: Record<string, any>, // <- OBJETO (não array!)
+    where: Record<string, any>,
   ): Promise<void> {
     await this.ensureSession(deviceId);
     const http = await this.getHttp(deviceId);
     const url = `/modify_objects.fcgi?session=${this.sessions[deviceId]}`;
-    for (const u of updates) {
-      const body = {
-        object: 'users',
-        values: [u.values],
-        where: { users: { id: u.id } },
-      };
-      await http.post(url, body);
+    try {
+      await http.post(url, { object, values, where });
+    } catch (e: any) {
+      if (e?.response?.status === 400) {
+        throw this.enrichBadRequest(e, {
+          op: 'modify_objects',
+          deviceId,
+          object,
+          where,
+          values: Object.keys(values),
+        });
+      }
+      throw e;
     }
-    this.logger.log(
-      `✔ Batch update: ${updates.length} users on device ${deviceId}`,
-    );
   }
+
+  // 🔧 FIX: updateUsersBatch — trocar values: [u.values] -> values: u.values (objeto)
+  async updateUsersBatch(
+    deviceId: number,
+    updates: Array<{ id: number; values: Record<string, any> }>,
+  ): Promise<void> {
+    if (!updates?.length) return;
+    for (const u of updates) {
+      await this.modifyObjects(
+        deviceId,
+        'users',
+        u.values,                          // <- objeto, ex: { name: '...', registration: '...' }
+        { users: { id: u.id } },           // where como já estava
+      );
+    }
+    this.logger.log({ msg: 'idface.update_users.ok', deviceId, count: updates.length });
+  };
 
   async deleteObjects(
     deviceId: number,
@@ -509,6 +543,6 @@ export class IdfaceService {
     this.logger.log(
       `✔ addUserAccess ok (user=${userId}, group=${groupId}, rule=${accessRuleId})`,
     );
-  } 
+  }
 
 }

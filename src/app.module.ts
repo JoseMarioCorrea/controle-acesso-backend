@@ -7,13 +7,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DepartmentsModule } from './departments/departments.module';
 import { AuthModule } from './auth/auth.modulle';
-import { IdfaceModule } from './devices/idface.module'; 
+import { IdfaceModule } from './devices/idface.module';
 import { PessoaModule } from './pessoa/pessoa.module';
 import { LicenseModule } from './license/license.module';
 import { TerminalsModule } from './terminals/terminals.module';
 import { VisitorModule } from './visitors/visitors.module';
 import './polyfill';
 import { SyncModule } from './sync/sync.module';
+import { existsSync, mkdirSync } from 'fs';
 
 @Module({
   imports: [
@@ -23,16 +24,19 @@ import { SyncModule } from './sync/sync.module';
     /* TypeORM — fábrica com baseDir dinâmico */
     TypeOrmModule.forRootAsync({
       useFactory: () => {
-        const runningInPkg = typeof (process as any).pkg !== 'undefined';
-        const baseDir = runningInPkg ? dirname(process.execPath) : __dirname;
+        const dbDir = join(
+          process.env.PROGRAMDATA!,            // C:\ProgramData
+          'ControleAcesso', 'data'
+        );
+        if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });
 
         return {
           type: 'sqlite',
-          database: join(baseDir, 'data', 'controle_acesso.sqlite'),
+          database: join(dbDir, 'controle_acesso.sqlite'),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: true,
           autoLoadEntities: true,
-          logging: false,
+          logging: ['error'],   // ativa log pra ver qualquer trava
         };
       },
     }),

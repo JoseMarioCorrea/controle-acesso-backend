@@ -4,10 +4,11 @@ import {
     Logger,
     NotFoundException,
     BadRequestException,
+    HttpException,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan } from 'typeorm';
+import { Repository, LessThan, SelectQueryBuilder } from 'typeorm';
 
 import {
     SyncTask,
@@ -16,10 +17,7 @@ import {
     SyncTargetType,
     ErrorCategory,
 } from './sync-task.entity';
-import {
-    CreateSyncTaskDto,
-    RequeueSyncTaskDto,
-} from './dto/create-sync-task.dto';
+import { CreateSyncTaskDto, RequeueSyncTaskDto } from './dto/create-sync-task.dto';
 
 import { Pessoa } from '../pessoa/pessoa.entity';
 import { Visitante } from '../visitors/visitor.entity';
@@ -36,22 +34,24 @@ const MAX_BATCH = 40;
 const LOCK_TIMEOUT_MS = 60_000;
 const BASE_BACKOFF_MS = 15_000;
 
+type ErrInfo = {
+    statusCode: number | null;
+    message: string;
+    details?: any;
+    isHttpException: boolean;
+};
+
 @Injectable()
 export class SyncService {
     private readonly logger = new Logger(SyncService.name);
     private processing = false;
 
     constructor(
-        @InjectRepository(SyncTask)
-        private readonly taskRepo: Repository<SyncTask>,
-        @InjectRepository(SyncDeviceUserMap)
-        private readonly mapRepo: Repository<SyncDeviceUserMap>,
-        @InjectRepository(Pessoa)
-        private readonly pessoaRepo: Repository<Pessoa>,
-        @InjectRepository(Visitante)
-        private readonly visitanteRepo: Repository<Visitante>,
-        @InjectRepository(Device)
-        private readonly deviceRepo: Repository<Device>,
+        @InjectRepository(SyncTask) private readonly taskRepo: Repository<SyncTask>,
+        @InjectRepository(SyncDeviceUserMap) private readonly mapRepo: Repository<SyncDeviceUserMap>,
+        @InjectRepository(Pessoa) private readonly pessoaRepo: Repository<Pessoa>,
+        @InjectRepository(Visitante) private readonly visitanteRepo: Repository<Visitante>,
+        @InjectRepository(Device) private readonly deviceRepo: Repository<Device>,
         private readonly idface: IdfaceService,
     ) { }
 
@@ -60,14 +60,16 @@ export class SyncService {
     async createTask(dto: CreateSyncTaskDto): Promise<SyncTask> {
         const task = this.taskRepo.create({
             targetType: dto.targetType,
-            targetId: dto.targetId,
+            targetId: String(dto.targetId),
             operation: dto.operation,
             maxAttempts: dto.maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
             scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : new Date(),
             payload: dto.payload ?? null,
             state: SyncTaskState.PENDING,
         });
-        return this.taskRepo.save(task);
+        const saved = await this.taskRepo.save(task);
+        this.logInfo('task.created', this.ctxTask(saved));
+        return saved;
     }
 
     async enqueueUnique(params: {
@@ -78,24 +80,27 @@ export class SyncService {
         payload?: any;
         maxAttempts?: number;
     }): Promise<boolean> {
+        const targetId = String(params.targetId);
         const existing = await this.taskRepo.findOne({
             where: {
                 targetType: params.targetType,
-                targetId: String(params.targetId),
+                targetId,
                 operation: params.operation,
                 state: SyncTaskState.PENDING,
             },
         });
-        if (existing) return false;
-        const scheduledAtStr =
-            params.scheduledAt instanceof Date
-                ? params.scheduledAt.toISOString()
-                : (params.scheduledAt as string | undefined);
+        if (existing) {
+            this.logDebug('task.enqueue.skipped.alreadyPending', this.ctx({ targetType: params.targetType, targetId, operation: params.operation }));
+            return false;
+        }
         await this.createTask({
             targetType: params.targetType,
-            targetId: String(params.targetId),
+            targetId,
             operation: params.operation,
-            scheduledAt: scheduledAtStr,
+            scheduledAt:
+                params.scheduledAt instanceof Date
+                    ? params.scheduledAt.toISOString()
+                    : (params.scheduledAt as string | undefined),
             payload: params.payload,
             maxAttempts: params.maxAttempts,
         });
@@ -143,15 +148,13 @@ export class SyncService {
 
     async cancelTask(id: number): Promise<void> {
         const t = await this.getTask(id);
-        if (
-            [SyncTaskState.SUCCESS, SyncTaskState.ERROR, SyncTaskState.CANCELLED].includes(
-                t.state,
-            )
-        ) {
+        if ([SyncTaskState.SUCCESS, SyncTaskState.ERROR, SyncTaskState.CANCELLED].includes(t.state)) {
+            this.logDebug('task.cancel.skipped.finalState', this.ctxTask(t));
             return;
         }
         t.state = SyncTaskState.CANCELLED;
         await this.taskRepo.save(t);
+        this.logWarn('task.cancelled', this.ctxTask(t));
     }
 
     async requeueTask(id: number, dto: RequeueSyncTaskDto): Promise<SyncTask> {
@@ -159,19 +162,24 @@ export class SyncService {
         if (t.state === SyncTaskState.RUNNING) {
             throw new BadRequestException('Task em execução');
         }
-        t.state = SyncTaskState.PENDING;
-        t.lockedAt = null;
-        t.finishedAt = null;
-        t.lastError = null;
-        t.errorCategory = null;
-        t.lastStatusCode = null;
-        t.attempts = 0;
-        t.scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
-        return this.taskRepo.save(t);
+        Object.assign(t, {
+            state: SyncTaskState.PENDING,
+            lockedAt: null,
+            finishedAt: null,
+            lastError: null,
+            errorCategory: null,
+            lastStatusCode: null,
+            attempts: 0,
+            scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : new Date(),
+        });
+        const saved = await this.taskRepo.save(t);
+        this.logInfo('task.requeued', this.ctxTask(saved));
+        return saved;
     }
 
     async dispatchNow(): Promise<{ processed: number }> {
-        return { processed: await this.processLoop() };
+        const processed = await this.processLoop();
+        return { processed };
     }
 
     async rebuildQueue(): Promise<{ enqueued: number }> {
@@ -179,48 +187,21 @@ export class SyncService {
 
         const pessoas = await this.pessoaRepo.find();
         for (const p of pessoas) {
-            if (
-                await this.ensureTaskUnique(
-                    SyncTargetType.PESSOA,
-                    p.id,
-                    SyncOperation.CREATE_OR_UPDATE_USER,
-                )
-            )
-                count++;
+            if (await this.ensureTaskUnique(SyncTargetType.PESSOA, p.id, SyncOperation.CREATE_OR_UPDATE_USER)) count++;
             if ((p as any).fotoFilename) {
-                if (
-                    await this.ensureTaskUnique(
-                        SyncTargetType.PESSOA,
-                        p.id,
-                        SyncOperation.TEST_PHOTO,
-                    )
-                )
-                    count++;
+                if (await this.ensureTaskUnique(SyncTargetType.PESSOA, p.id, SyncOperation.TEST_PHOTO)) count++;
             }
         }
 
         const visitantes = await this.visitanteRepo.find();
         for (const v of visitantes) {
-            if (
-                await this.ensureTaskUnique(
-                    SyncTargetType.VISITANTE,
-                    v.id,
-                    SyncOperation.CREATE_OR_UPDATE_USER,
-                )
-            )
-                count++;
+            if (await this.ensureTaskUnique(SyncTargetType.VISITANTE, v.id, SyncOperation.CREATE_OR_UPDATE_USER)) count++;
             if ((v as any).fotoFilename) {
-                if (
-                    await this.ensureTaskUnique(
-                        SyncTargetType.VISITANTE,
-                        v.id,
-                        SyncOperation.TEST_PHOTO,
-                    )
-                )
-                    count++;
+                if (await this.ensureTaskUnique(SyncTargetType.VISITANTE, v.id, SyncOperation.TEST_PHOTO)) count++;
             }
         }
 
+        this.logInfo('queue.rebuild.completed', { enqueued: count });
         return { enqueued: count };
     }
 
@@ -234,23 +215,22 @@ export class SyncService {
     private async processLoop(): Promise<number> {
         if (this.processing) return 0;
         this.processing = true;
+
+        const startedAt = Date.now();
         let processed = 0;
 
         try {
             const now = new Date();
             await this.releaseStaleLocks(now);
 
-            const tasks = await this.taskRepo
-                .createQueryBuilder('t')
-                .where('t.state = :p', { p: SyncTaskState.PENDING })
-                .andWhere('(t.scheduledAt IS NULL OR t.scheduledAt <= :now)', { now })
-                .orderBy('t.scheduledAt', 'ASC')
-                .addOrderBy('t.id', 'ASC')
-                .limit(MAX_BATCH)
-                .getMany();
+            const tasks = await this.queryPending(now).getMany();
 
-            if (!tasks.length) return 0;
+            if (!tasks.length) {
+                this.logDebug('loop.noTasks', { now: now.toISOString() });
+                return 0;
+            }
 
+            // lock
             for (const t of tasks) {
                 t.state = SyncTaskState.RUNNING;
                 t.lockedAt = new Date();
@@ -258,21 +238,33 @@ export class SyncService {
             await this.taskRepo.save(tasks);
 
             for (const task of tasks) {
+                const t0 = Date.now();
+                this.logInfo('task.begin', this.ctxTask(task));
+
                 try {
                     await this.executeTask(task);
                     task.state = SyncTaskState.SUCCESS;
                     task.finishedAt = new Date();
+                    await this.taskRepo.save(task);
+
+                    this.logInfo('task.end', {
+                        ...this.ctxTask(task),
+                        durationMs: Date.now() - t0,
+                    });
                 } catch (e: any) {
-                    const { category, retry } = this.classifyError(e);
+                    const info = this.unwrapHttpError(e);
+                    const { category, retry } = this.classifyError(e, info);
                     task.attempts += 1;
-                    task.lastError = (e?.message || 'Erro').slice(0, 1000);
+                    task.lastError = (info.message || 'Erro').slice(0, 1000);
                     task.errorCategory = category;
-                    task.lastStatusCode = e?.response?.status ?? null;
+                    task.lastStatusCode = info.statusCode;
 
                     const canRetry = retry && task.attempts < task.maxAttempts;
+                    let delayMs: number | undefined;
+
                     if (canRetry) {
-                        const delay = BASE_BACKOFF_MS * Math.pow(2, task.attempts - 1);
-                        task.scheduledAt = new Date(Date.now() + delay);
+                        delayMs = this.computeBackoff(task.attempts);
+                        task.scheduledAt = new Date(Date.now() + delayMs);
                         task.state = SyncTaskState.PENDING;
                         task.lockedAt = null;
                     } else {
@@ -280,20 +272,38 @@ export class SyncService {
                         task.finishedAt = new Date();
                     }
 
-                    this.logger.warn(
-                        `[SYNC] Falha task=${task.id} op=${task.operation} cat=${category} attempts=${task.attempts}/${task.maxAttempts} retry=${canRetry} msg=${task.lastError}`,
-                    );
+                    await this.taskRepo.save(task);
+
+                    this.logWarn('task.error', {
+                        ...this.ctxTask(task),
+                        durationMs: Date.now() - t0,
+                        error: {
+                            message: task.lastError,
+                            statusCode: task.lastStatusCode,
+                            name: e?.name,
+                            code: e?.code,
+                            details: this.safeDetails(info.details),
+                        },
+                        category,
+                        attempts: task.attempts,
+                        maxAttempts: task.maxAttempts,
+                        retry: canRetry,
+                        delayMs,
+                    });
                 }
-                await this.taskRepo.save(task);
+
                 processed++;
             }
         } finally {
             this.processing = false;
+            if (processed) {
+                this.logInfo('loop.summary', {
+                    processed,
+                    durationMs: Date.now() - startedAt,
+                });
+            }
         }
 
-        if (processed) {
-            this.logger.log(`Processadas ${processed} tarefas de sync`);
-        }
         return processed;
     }
 
@@ -311,37 +321,47 @@ export class SyncService {
             case SyncOperation.RECONCILE_USER:
                 return this.opReconcileUser(task);
             default:
-                throw new Error(`Operação não implementada: ${task.operation}`);
+                throw this.nonTransient(`Operação não implementada: ${task.operation}`);
         }
     }
 
     /* ==================== CLASSIFICAÇÃO DE ERRO ==================== */
-    private classifyError(e: any): { category: ErrorCategory; retry: boolean } {
-        const status = e?.response?.status;
-        const msg = (e?.message || '').toLowerCase();
+    private classifyError(
+        e: any,
+        info?: ErrInfo,
+    ): { category: ErrorCategory; retry: boolean } {
+        const status = info?.statusCode ?? e?.response?.status;
+        const msg = (info?.message || e?.message || '').toLowerCase();
+        const bodyStr = info?.details
+            ? (typeof info.details === 'string' ? info.details : JSON.stringify(info.details)).toLowerCase()
+            : '';
 
         if (this.isNonTransient(e)) return { category: 'PERMANENT', retry: false };
 
-        if (status === 401 || status === 403)
-            return { category: 'AUTH', retry: true };
+        if (status === 401 || status === 403) return { category: 'AUTH', retry: true };
         if (status === 404) return { category: 'NOT_FOUND', retry: false };
-        if (status && status >= 500) return { category: 'TRANSIENT', retry: true };
-        if (e?.code === 'ECONNREFUSED' || e?.code === 'ETIMEDOUT')
-            return { category: 'TRANSIENT', retry: true };
 
-        if (/visitante sem departamento/.test(msg))
+        // 400 – decide por conteúdo
+        if (status === 400) {
+            if (/\b(unique|already exists|duplicate|violação|duplicad)/.test(bodyStr)) return { category: 'PERMANENT', retry: false };
+            if (/\b(invalid|validation|required|campo obrigat|bad value|bad json)/.test(bodyStr) || /payload inválido|validation/.test(msg))
+                return { category: 'PERMANENT', retry: false };
+            // sessão inválida às vezes vem como 400 em firmwares antigos
+            if (/\b(session|token).*(invalid|expired)\b/.test(bodyStr)) return { category: 'AUTH', retry: true };
+            // fallback 400 desconhecido: falha rápida
             return { category: 'PERMANENT', retry: false };
-        if (/pessoa sem department/.test(msg))
-            return { category: 'PERMANENT', retry: false };
-        if (/departamento .* sem device/.test(msg))
-            return { category: 'PERMANENT', retry: false };
-        if (/pessoa não encontrada/.test(msg) || /visitante não encontrado/.test(msg))
-            return { category: 'PERMANENT', retry: false };
+        }
+
+        if (status && status >= 500) return { category: 'TRANSIENT', retry: true };
+        if (e?.code === 'ECONNREFUSED' || e?.code === 'ETIMEDOUT') return { category: 'TRANSIENT', retry: true };
+
+        // regras específicas
+        if (/visitante sem departamento/.test(msg)) return { category: 'PERMANENT', retry: false };
+        if (/pessoa sem department/.test(msg)) return { category: 'PERMANENT', retry: false };
+        if (/departamento .* sem device/.test(msg)) return { category: 'PERMANENT', retry: false };
+        if (/pessoa não encontrada|visitante não encontrado/.test(msg)) return { category: 'PERMANENT', retry: false };
         if (/mapping ausente/.test(msg)) return { category: 'TRANSIENT', retry: true };
-        if (/foto.*(não encontrada|ausente)/.test(msg))
-            return { category: 'PERMANENT', retry: false };
-        if (/payload inválido|validation/.test(msg))
-            return { category: 'PERMANENT', retry: false };
+        if (/foto.*(não encontrada|ausente)/.test(msg)) return { category: 'PERMANENT', retry: false };
 
         return { category: 'INTERNAL', retry: true };
     }
@@ -359,7 +379,7 @@ export class SyncService {
                 t.lastError = (t.lastError ? t.lastError + ' | ' : '') + 'lock timeout';
             }
             await this.taskRepo.save(locked);
-            this.logger.warn(`Liberados ${locked.length} locks stale`);
+            this.logWarn('locks.released.stale', { count: locked.length, staleMs: LOCK_TIMEOUT_MS });
         }
     }
 
@@ -377,26 +397,27 @@ export class SyncService {
             },
         });
         if (existing) return false;
-        await this.createTask({
-            targetType,
-            targetId: String(targetId),
-            operation,
-        });
+        await this.createTask({ targetType, targetId: String(targetId), operation });
         return true;
     }
 
     /* ==================== OPERAÇÕES ==================== */
 
     private async opCreateOrUpdateUser(task: SyncTask) {
-        // Device correto para o departamento atual
         const { entity, device: currentDevice } = await this.loadEntityAndDevice(task);
 
         let mapping = await this.mapRepo.findOne({
             where: { targetType: task.targetType, targetId: task.targetId },
         });
 
-        /* 1. mapping existe mas device mudou  --------------------------------- */
+        // 1) mapping existe mas device mudou
         if (mapping && mapping.deviceId !== currentDevice.id) {
+            this.logInfo('op.createOrUpdate.relocateUser', {
+                ...this.ctxTask(task),
+                fromDevice: mapping.deviceId,
+                toDevice: currentDevice.id,
+            });
+
             try {
                 await this.idface.deleteObjects(mapping.deviceId, 'users', {
                     users: { id: mapping.deviceUserId },
@@ -408,22 +429,35 @@ export class SyncService {
             mapping = null;
         }
 
-        /* 2. mapping correto -> só atualizar nome/registration ---------------- */
+        // validação + normalização
+        const registrationRaw =
+            (entity as any).matricula ?? (entity as any).cpf ?? String(entity.id).slice(0, 12);
+
+        if (!entity.nome || typeof entity.nome !== 'string' || entity.nome.trim().length < 2) {
+            throw this.nonTransient('payload inválido: nome ausente/curto');
+        }
+        if (!registrationRaw || String(registrationRaw).trim().length < 3) {
+            throw this.nonTransient('payload inválido: registration ausente/curta');
+        }
+
+        const values = {
+            name: entity.nome.trim().slice(0, 64),
+            registration: String(registrationRaw).trim().slice(0, 32),
+        };
+
+        // 2) mapping ok -> atualizar
         if (mapping) {
             await this.idface.updateUsersBatch(currentDevice.id, [
-                {
-                    id: mapping.deviceUserId,
-                    values: {
-                        name: entity.nome,
-                        registration:
-                            (entity as any).matricula ??
-                            (entity as any).cpf ??
-                            String(entity.id).slice(0, 12),
-                    },
-                },
+                { id: mapping.deviceUserId, values },
             ]);
 
             await this.idface.addUserAccess(currentDevice.id, mapping.deviceUserId);
+
+            this.logInfo('op.createOrUpdate.updated', {
+                ...this.ctxTask(task),
+                deviceId: currentDevice.id,
+                deviceUserId: mapping.deviceUserId,
+            });
 
             if ((entity as any).fotoFilename) {
                 await this.ensureTaskUnique(task.targetType, task.targetId, SyncOperation.TEST_PHOTO);
@@ -431,17 +465,12 @@ export class SyncService {
             return;
         }
 
-        /* 3. sem mapping -> criar usuário no device atual ---------------------- */
-        const registration =
-            (entity as any).matricula ??
-            (entity as any).cpf ??
-            String(entity.id).slice(0, 12);
-
+        // 3) sem mapping -> criar
         const ids = await this.idface.createUsersBatch(currentDevice.id, [
-            { name: entity.nome, registration },
+            { name: values.name, registration: values.registration },
         ]);
         const deviceUserId = ids?.[0];
-        if (!deviceUserId) throw new Error('createUsersBatch não retornou id válido');
+        if (!deviceUserId) throw this.nonTransient('createUsersBatch não retornou id válido');
 
         await this.mapRepo.save(
             this.mapRepo.create({
@@ -454,6 +483,12 @@ export class SyncService {
 
         await this.idface.addUserAccess(currentDevice.id, deviceUserId);
 
+        this.logInfo('op.createOrUpdate.created', {
+            ...this.ctxTask(task),
+            deviceId: currentDevice.id,
+            deviceUserId,
+        });
+
         if ((entity as any).fotoFilename) {
             await this.ensureTaskUnique(task.targetType, task.targetId, SyncOperation.TEST_PHOTO);
         }
@@ -464,7 +499,7 @@ export class SyncService {
 
         const fotoFilename = (entity as any).fotoFilename;
         if (!fotoFilename) {
-            this.logger.warn(`Sem foto para testar (${task.targetType}:${task.targetId})`);
+            this.logWarn('op.testPhoto.noPhoto', this.ctxTask(task));
             return;
         }
 
@@ -477,49 +512,36 @@ export class SyncService {
             throw this.nonTransient(`Foto não encontrada em disco: ${fullPath}`);
         }
 
-        // Chama teste real
-        try {
-            const test = await this.idface.testUserImage(device.id, buffer);
-            if (!test?.success) {
-                // Erro permanente? Depende da política -> se quiser re-tentar, lance erro comum.
-                const reason =
-                    (test?.errors && test.errors.map((e: any) => e.message).join(', ')) ||
-                    'reprovada';
-                throw this.nonTransient(`Teste de foto falhou: ${reason}`);
-            }
-        } catch (e) {
-            // Propaga para retry/classificação
-            throw e;
+        const test = await this.idface.testUserImage(device.id, buffer);
+        if (!test?.success) {
+            const reason = (test?.errors && test.errors.map((e: any) => e.message).join(', ')) || 'reprovada';
+            throw this.nonTransient(`Teste de foto falhou: ${reason}`);
         }
 
-        this.logger.log(
-            `[SYNC] Teste de foto OK device=${device.id} devUser=${mapping.deviceUserId} file=${fotoFilename}`,
-        );
+        this.logInfo('op.testPhoto.ok', {
+            ...this.ctxTask(task),
+            deviceId: device.id,
+            deviceUserId: mapping.deviceUserId,
+            filename: fotoFilename,
+        });
 
-        await this.ensureTaskUnique(
-            task.targetType,
-            task.targetId,
-            SyncOperation.UPLOAD_PHOTO,
-        );
+        await this.ensureTaskUnique(task.targetType, task.targetId, SyncOperation.UPLOAD_PHOTO);
     }
 
     private async opUploadPhoto(task: SyncTask) {
         const { entity, device, mapping } = await this.loadEntityDeviceAndMapping(task);
-
         const fotoFilename = (entity as any).fotoFilename;
         if (!fotoFilename) {
-            this.logger.warn(`Sem foto para upload (${task.targetType}:${task.targetId})`);
+            this.logWarn('op.uploadPhoto.noPhoto', this.ctxTask(task));
             return;
         }
 
-        // Evita re-upload da mesma foto se já marcado (opcional)
-        if (
-            (mapping as any).lastUploadedPhoto &&
-            (mapping as any).lastUploadedPhoto === fotoFilename
-        ) {
-            this.logger.log(
-                `[SYNC] Foto já enviada devUser=${mapping.deviceUserId} file=${fotoFilename} – ignorando`,
-            );
+        if ((mapping as any).lastUploadedPhoto === fotoFilename) {
+            this.logDebug('op.uploadPhoto.skipped.sameFile', {
+                ...this.ctxTask(task),
+                deviceUserId: mapping.deviceUserId,
+                filename: fotoFilename,
+            });
             return;
         }
 
@@ -540,53 +562,45 @@ export class SyncService {
             await this.mapRepo.save(mapping);
         }
 
-        this.logger.log(
-            `[SYNC] Upload de foto concluído device=${device.id} devUser=${mapping.deviceUserId} file=${fotoFilename}`,
-        );
+        this.logInfo('op.uploadPhoto.done', {
+            ...this.ctxTask(task),
+            deviceId: device.id,
+            deviceUserId: mapping.deviceUserId,
+            filename: fotoFilename,
+        });
     }
 
     private async opDeleteUser(task: SyncTask) {
-        await this.safeLoadEntityForDelete(task); // só para efeito colateral de validação/tipo
+        await this.safeLoadEntityForDelete(task); // validação leve
         const mapping = await this.mapRepo.findOne({
             where: { targetType: task.targetType, targetId: task.targetId },
         });
 
         if (!mapping) {
-            this.logger.warn(
-                `[SYNC] DELETE_USER sem mapping target=${task.targetType}:${task.targetId} – idempotente`,
-            );
+            this.logWarn('op.deleteUser.noMapping.idempotent', this.ctxTask(task));
             return;
         }
 
         const device = await this.deviceRepo.findOne({ where: { id: mapping.deviceId } });
         if (!device) {
             await this.mapRepo.remove(mapping);
-            this.logger.warn(`[SYNC] Mapping órfão removido (device inexistente)`);
+            this.logWarn('op.deleteUser.orphanMapping.removed', { ...this.ctxTask(task), mappingDeviceId: mapping.deviceId });
             return;
         }
 
         try {
-            await this.idface.deleteObjects(device.id, 'users', {
-                users: { id: mapping.deviceUserId },
-            });
+            await this.idface.deleteObjects(device.id, 'users', { users: { id: mapping.deviceUserId } });
         } catch (e: any) {
             if (!this.isUserNotFoundDeviceError(e)) throw e;
-            this.logger.log(
-                `[SYNC] Usuário já inexistente no device devUser=${mapping.deviceUserId}`,
-            );
+            this.logInfo('op.deleteUser.alreadyMissing', { ...this.ctxTask(task), deviceUserId: mapping.deviceUserId });
         }
 
         await this.mapRepo.remove(mapping);
-        this.logger.log(
-            `[SYNC] DELETE_USER concluído devUserId=${mapping.deviceUserId} device=${device.id}`,
-        );
+        this.logInfo('op.deleteUser.done', { ...this.ctxTask(task), deviceId: device.id, deviceUserId: mapping.deviceUserId });
     }
 
     private async opReconcileUser(task: SyncTask) {
-        // Placeholder (poderia checar se user existe no device, etc.)
-        this.logger.log(
-            `Reconciliação dummy ${task.targetType}:${task.targetId}`,
-        );
+        this.logInfo('op.reconcileUser.noop', this.ctxTask(task));
     }
 
     /* ==================== LOAD HELPERS ==================== */
@@ -595,7 +609,13 @@ export class SyncService {
         if (task.targetType === SyncTargetType.PESSOA) {
             const p = await this.pessoaRepo.findOne({
                 where: { id: task.targetId as any },
-                relations: ['department', 'department.devices'],
+                relations: [
+                    'department',
+                    'department.devices',
+                    'grupos',
+                    'grupos.department',
+                    'grupos.department.devices',
+                ],
             });
             if (!p) throw new NotFoundException('Pessoa não encontrada');
             return p;
@@ -607,49 +627,34 @@ export class SyncService {
         if (!v) throw new NotFoundException('Visitante não encontrado');
         return v;
     }
-
-    private async loadEntityLight(
-        task: SyncTask,
-    ): Promise<Pessoa | Visitante | null> {
-        if (task.targetType === SyncTargetType.PESSOA) {
-            return this.pessoaRepo.findOne({
-                where: { id: task.targetId as any },
-            });
-        }
-        return this.visitanteRepo.findOne({
-            where: { id: Number(task.targetId) },
-        });
+    private pickDepartmentFromEntityWithSource(entity: any) {
+        const viaGrupo = entity?.grupos?.[0]?.department;
+        if (viaGrupo) return { dep: viaGrupo, source: 'grupo' };
+        return { dep: entity?.department ?? null, source: 'department' };
     }
 
-    private async safeLoadEntityForDelete(
-        task: SyncTask,
-    ): Promise<Pessoa | Visitante | null> {
+    private async findDeviceForEntity(_targetType: SyncTargetType, entity: any): Promise<Device> {
+        const { dep, source } = this.pickDepartmentFromEntityWithSource(entity);
+        if (!dep) throw this.nonTransient('Entidade sem departamento (via grupo ou direto)');
+        if (!dep.devices?.length) throw this.nonTransient(`Departamento ${dep.id} sem device`);
+        this.logDebug('device.pick', { source, departmentId: dep.id, devices: dep.devices.map((d: any) => d.id) });
+        return dep.devices[0];
+    }
+
+
+    private async loadEntityLight(task: SyncTask): Promise<Pessoa | Visitante | null> {
+        if (task.targetType === SyncTargetType.PESSOA) {
+            return this.pessoaRepo.findOne({ where: { id: task.targetId as any } });
+        }
+        return this.visitanteRepo.findOne({ where: { id: Number(task.targetId) } });
+    }
+
+    private async safeLoadEntityForDelete(task: SyncTask): Promise<Pessoa | Visitante | null> {
         try {
             return await this.loadEntity(task);
         } catch {
             return null;
         }
-    }
-
-    private async findDeviceForEntity(
-        targetType: SyncTargetType,
-        entity: any,
-    ): Promise<Device> {
-        if (targetType === SyncTargetType.VISITANTE) {
-            const dep = entity.grupos?.[0]?.department;
-            if (!dep || !dep.devices?.length) {
-                throw this.nonTransient(
-                    'Visitante sem departamento/device associado via grupos',
-                );
-            }
-            return dep.devices[0];
-        }
-        const dep = entity.department;
-        if (!dep) throw this.nonTransient('Pessoa sem department carregado');
-        if (!dep.devices?.length) {
-            throw this.nonTransient(`Departamento ${dep.id} sem device`);
-        }
-        return dep.devices[0];
     }
 
     private async loadEntityAndDevice(task: SyncTask) {
@@ -663,16 +668,10 @@ export class SyncService {
             where: { targetType: task.targetType, targetId: task.targetId },
         });
         if (!mapping) {
-            await this.ensureTaskUnique(
-                task.targetType,
-                task.targetId,
-                SyncOperation.CREATE_OR_UPDATE_USER,
-            );
+            await this.ensureTaskUnique(task.targetType, task.targetId, SyncOperation.CREATE_OR_UPDATE_USER);
             throw new Error('Mapping ausente – criação enfileirada');
         }
-        const device = await this.deviceRepo.findOne({
-            where: { id: mapping.deviceId },
-        });
+        const device = await this.deviceRepo.findOne({ where: { id: mapping.deviceId } });
         if (!device) throw this.nonTransient(`Device ${mapping.deviceId} ausente`);
         const entity = await this.loadEntityLight(task);
         if (!entity) throw new NotFoundException('Entidade não encontrada (mapping)');
@@ -681,11 +680,17 @@ export class SyncService {
 
     /* ==================== UTIL ==================== */
 
-    private buildPhotoPath(
-        targetType: SyncTargetType,
-        id: string | number,
-        filename: string,
-    ): string {
+    private queryPending(now: Date): SelectQueryBuilder<SyncTask> {
+        return this.taskRepo
+            .createQueryBuilder('t')
+            .where('t.state = :p', { p: SyncTaskState.PENDING })
+            .andWhere('(t.scheduledAt IS NULL OR t.scheduledAt <= :now)', { now })
+            .orderBy('t.scheduledAt', 'ASC')
+            .addOrderBy('t.id', 'ASC')
+            .limit(MAX_BATCH);
+    }
+
+    private buildPhotoPath(targetType: SyncTargetType, id: string | number, filename: string): string {
         const baseDir =
             targetType === SyncTargetType.VISITANTE
                 ? getUploadsPath('visitors', id.toString())
@@ -706,5 +711,92 @@ export class SyncService {
 
     private isNonTransient(e: any): boolean {
         return !!e?.__nonTransient;
+    }
+
+    private computeBackoff(attempts: number) {
+        return BASE_BACKOFF_MS * Math.pow(2, Math.max(0, attempts - 1));
+    }
+
+    private unwrapHttpError(e: any): ErrInfo {
+        // Nest HttpException
+        if (e instanceof HttpException) {
+            const status = e.getStatus?.() ?? null;
+            const resp = e.getResponse?.();
+            const details = typeof resp === 'string' ? { message: resp } : resp;
+            return {
+                statusCode: status,
+                message: (typeof details === 'object' && details !== null && 'message' in details ? (details as any).message : undefined) || e.message || 'HttpException',
+                details,
+                isHttpException: true,
+            };
+        }
+        // AxiosError
+        if (e?.isAxiosError) {
+            const status = e.response?.status ?? null;
+            const data = e.response?.data;
+            return {
+                statusCode: status,
+                message: e.message || 'AxiosError',
+                details: data,
+                isHttpException: false,
+            };
+        }
+        // Fallback
+        return {
+            statusCode: e?.response?.status ?? null,
+            message: e?.message ?? 'Error',
+            details: e?.response?.data,
+            isHttpException: false,
+        };
+    }
+
+    /** Evita vazar PII no log */
+    private safeDetails(details: any) {
+        try {
+            if (!details) return undefined;
+            const obj = typeof details === 'string' ? JSON.parse(details) : { ...details };
+            const mask = (v: any) =>
+                typeof v === 'string' ? v.replace(/\b(\d{3})\d{3}(\d{3})\b/g, '$1***$2') : v;
+            const walk = (o: any) => {
+                if (!o || typeof o !== 'object') return o;
+                for (const k of Object.keys(o)) {
+                    if (/cpf|registration|matric/i.test(k)) o[k] = mask(o[k]);
+                    else if (typeof o[k] === 'object') o[k] = walk(o[k]);
+                }
+                return o;
+            };
+            return walk(obj);
+        } catch {
+            return details;
+        }
+    }
+
+    /* ==================== LOG HELPERS ==================== */
+
+    private ctx(extra?: Record<string, any>) {
+        return extra ?? {};
+    }
+
+    private ctxTask(task: SyncTask, extra?: Record<string, any>) {
+        return {
+            taskId: task.id,
+            op: task.operation,
+            state: task.state,
+            target: `${task.targetType}:${task.targetId}`,
+            attempts: task.attempts,
+            maxAttempts: task.maxAttempts,
+            scheduledAt: task.scheduledAt?.toISOString?.() ?? task.scheduledAt,
+            ...extra,
+        };
+    }
+
+    private logInfo(msg: string, meta?: Record<string, any>) {
+        this.logger.log({ msg, ...meta });
+    }
+    private logWarn(msg: string, meta?: Record<string, any>) {
+        this.logger.warn({ msg, ...meta });
+    }
+    private logDebug(msg: string, meta?: Record<string, any>) {
+        this.logger.debug({ msg, ...meta });
     }
 }

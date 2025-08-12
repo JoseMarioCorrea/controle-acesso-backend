@@ -375,3 +375,6 @@ Este documento resume em **markdown** todas as alterações realizadas no projet
 ---
 
 **Fim da documentação.** Copie e adapte conforme necessário. Qualquer dúvida ou acréscimo, é só falar!
+
+
+Invoke-PS2EXE .\install-services.ps1 .\install-services.exe -requireAdmin -noConsole
