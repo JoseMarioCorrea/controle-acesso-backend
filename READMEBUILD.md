@@ -378,3 +378,370 @@ Este documento resume em **markdown** todas as alterações realizadas no projet
 
 
 Invoke-PS2EXE .\install-services.ps1 .\install-services.exe -requireAdmin -noConsole
+
+
+
+
+
+
+
+
+<# install-services.ps1
+   Recria serviços Backend/Frontend via NSSM com LOG detalhado.
+
+   Uso:
+     PowerShell -NoProfile -ExecutionPolicy Bypass -File .\install-services.ps1
+     PowerShell -NoProfile -ExecutionPolicy Bypass -File .\install-services.ps1 -Pre
+#>
+
+param(
+  [switch]$Pre,
+  [string]$SvcBack         = 'ControleAcessoBackendV01',
+  [string]$SvcFront        = 'ControleAcessoFrontendV01',
+  [string]$BackPattern     = 'ControleAcesso*.exe',
+  [string]$FrontPattern    = 'Front*end*.exe',
+  [string]$NssmExe         = $null,
+  [switch]$StartNow,
+  # Se seu Front precisar abrir um arquivo HTML, informe aqui (opcional).
+  [string]$FrontHtmlPath   = $null,        # ex.: "C:\release\frontend\index.html"
+  [string]$FrontHtmlName   = 'index.html'  # usado se FrontHtmlPath não vier setado
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$PSDefaultParameterValues['Add-Content:Encoding'] = 'utf8'
+$PSDefaultParameterValues['Out-File:Encoding']    = 'utf8'
+
+# ───────────── paths base ─────────────
+$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).ProviderPath }
+$RootDir   = (Resolve-Path (Join-Path $ScriptDir '..')).Path
+$BinDir    = Join-Path $RootDir 'bin'
+
+# logs
+$RunId         = Get-Date -Format 'yyyyMMdd_HHmmss'
+$SvcLogRoot    = Join-Path $env:ProgramData "Techtra\ControleAcesso"
+$SetupLogRoot  = Join-Path $SvcLogRoot       "setup\$RunId"
+$BackSvcLogs   = Join-Path $SvcLogRoot 'backend'
+$FrontSvcLogs  = Join-Path $SvcLogRoot 'frontend'
+$null = New-Item -ItemType Directory -Force -Path $SetupLogRoot,$BackSvcLogs,$FrontSvcLogs | Out-Null
+$MainLog       = Join-Path $SetupLogRoot 'install_services.log'
+
+# ───────────── helpers ─────────────
+function Write-Log {
+  param([Parameter(Mandatory)][string]$Message,
+        [ValidateSet('INFO','WARN','ERROR','OK','CMD')][string]$Level='INFO')
+  $ts = Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff'
+  $line = "[$ts][$Level] $Message"
+  switch ($Level) {
+    'ERROR' { Write-Host $line -ForegroundColor Red }
+    'WARN'  { Write-Host $line -ForegroundColor Yellow }
+    'OK'    { Write-Host $line -ForegroundColor Green }
+    'CMD'   { Write-Host $line -ForegroundColor Cyan }
+    default { Write-Host $line }
+  }
+  Add-Content -Path $MainLog -Value $line
+}
+function Q([string]$s){ '"' + ($s -replace '"','""') + '"' }
+
+function Exec {
+  param(
+    [Parameter(Mandatory)][string]$File,
+    [Parameter(Mandatory)][string]$Args,
+    [string]$Step = $null,
+    [int[]]$SuccessCodes = @(0),
+    [switch]$NoThrow
+  )
+  if (-not (Test-Path $File)) {
+    Write-Log ("Arquivo não encontrado: {0}" -f $File) 'ERROR'
+    if (-not $NoThrow) { throw "Missing: $File" } else { return $null }
+  }
+  if ($Step) { Write-Log (">> {0}" -f $Step) 'CMD' }
+  Write-Log ("exec: {0} {1}" -f $File,$Args) 'CMD'
+
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $File
+  $psi.Arguments = $Args
+  $psi.RedirectStandardOutput = $true
+  $psi.RedirectStandardError  = $true
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $true
+  $p = [System.Diagnostics.Process]::Start($psi)
+  $stdout = $p.StandardOutput.ReadToEnd()
+  $stderr = $p.StandardError.ReadToEnd()
+  $p.WaitForExit()
+
+  if ($stdout) { Add-Content -Path $MainLog -Value $stdout.TrimEnd() }
+  if ($stderr) { Add-Content -Path $MainLog -Value ("[stderr] " + $stderr.TrimEnd()) }
+  Write-Log ("exitcode: {0}" -f $p.ExitCode) 'CMD'
+
+  if ($SuccessCodes -notcontains $p.ExitCode) {
+    if ($NoThrow) { Write-Log ("IGNORANDO falha (NoThrow): {0} {1}" -f $File,$Args) 'WARN' }
+    else          { throw ("Command failed ({0}): {1} {2}" -f $p.ExitCode,$File,$Args) }
+  }
+  return $p.ExitCode
+}
+
+# admin
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).
+  IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $admin) { Write-Log 'Rode como Administrador.' 'ERROR'; pause; exit 1 }
+
+# achar NSSM/EXEs
+function Find-Exe([string]$pattern){
+  Write-Log ("Procurando: {0} em {1}" -f $pattern,$RootDir)
+  $f = Get-ChildItem $RootDir -Recurse -Filter $pattern -File -ErrorAction SilentlyContinue |
+       Select-Object -First 1 -ExpandProperty FullName
+  if ($f) { Write-Log ("Achei: {0}" -f $f) 'OK' } else { Write-Log ("Não achei: {0}" -f $pattern) 'WARN' }
+  $f
+}
+if (-not $NssmExe) {
+  $cands = @(
+    (Join-Path $BinDir 'nssm.exe'),
+    (Join-Path $RootDir 'backend\tools\nssm.exe'),
+    (Join-Path $RootDir 'frontend\tools\nssm.exe'),
+    "$env:ProgramFiles(x86)\NSSM\nssm.exe",
+    "$env:ProgramFiles(x86)\tools\nssm\nssm.exe",
+    "C:\tools\nssm\nssm.exe"
+  )
+  $NssmExe = $cands | Where-Object { Test-Path $_ } | Select-Object -First 1
+}
+$BackExe  = Find-Exe $BackPattern
+$FrontExe = Find-Exe $FrontPattern
+
+Write-Log ("Host={0} User={1} PS={2} RootDir={3}" -f $env:COMPUTERNAME,$env:USERNAME,$PSVersionTable.PSVersion,$RootDir)
+Write-Log ("NSSM={0}" -f $NssmExe)
+if (-not (Test-Path $NssmExe)) { Write-Log "nssm.exe não encontrado." 'ERROR'; pause; exit 1 }
+if (-not $BackExe)             { Write-Log "Backend EXE não encontrado." 'ERROR'; pause; exit 1 }
+if (-not $FrontExe)            { Write-Log "Frontend EXE não encontrado." 'ERROR'; pause; exit 1 }
+
+# ───────────── utilitários Node ─────────────
+function Is-NodeHost([string]$exe){
+  $name = [IO.Path]::GetFileName($exe).ToLower()
+  if ($name -eq 'node.exe') { return $true }
+  try {
+    $vi = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe)
+    if ($vi.ProductName -like '*Node*' -or $vi.FileDescription -like '*Node*') { return $true }
+  } catch {}
+  return $false
+}
+function Find-NodeEntry([string]$base){
+  $cands = @(
+    (Join-Path $base 'dist\main.js'),
+    (Join-Path $base 'dist\server.js'),
+    (Join-Path $base 'dist\main.cjs'),
+    (Join-Path $base 'build\main.js'),
+    (Join-Path $base 'build\server.js'),
+    (Join-Path $base 'server.js'),
+    (Join-Path $base 'index.js')
+  )
+  foreach($c in $cands){ if (Test-Path $c) { return $c } }
+  $any = Get-ChildItem -Path $base -Recurse -Filter main.js -ErrorAction SilentlyContinue |
+         Select-Object -First 1 -ExpandProperty FullName
+  if ($any) { return $any }
+  return $null
+}
+function Make-AppParams-ABS([string]$entryFull){
+  $full = (Resolve-Path $entryFull).Path
+  return ('"""{0}"""' -f $full)  # triple-quotes para NSSM não zoar espaços
+}
+
+# ───────────── helpers de serviço ─────────────
+function Remove-Svc([string]$Name){
+  $svcName = $Name
+  $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
+  if ($svc) {
+    try { Exec -File $NssmExe -Args ("stop {0}" -f $svcName)   -Step ("nssm stop {0}" -f $svcName) -NoThrow } catch {}
+    try {
+      Exec -File $NssmExe -Args ("remove {0} confirm" -f $svcName) -Step ("nssm remove {0}" -f $svcName) -NoThrow
+      Write-Log ("Removido {0} (NSSM)" -f $svcName) 'OK'
+    } catch {}
+  }
+  Exec -File "$env:SystemRoot\System32\sc.exe" -Args ("stop {0}" -f $svcName)   -NoThrow
+  Exec -File "$env:SystemRoot\System32\sc.exe" -Args ("delete {0}" -f $svcName) -NoThrow
+  Start-Sleep -Milliseconds 700
+  try {
+    $rk = "HKLM:\SYSTEM\CurrentControlSet\Services\$svcName"
+    if (Test-Path $rk) { Remove-Item -Path $rk -Recurse -Force -ErrorAction Stop; Write-Log ("Registro removido: {0}" -f $rk) 'OK' }
+  } catch { Write-Log ("Não consegui limpar registro de {0}: {1}" -f $svcName, $_.Exception.Message) 'WARN' }
+}
+function Dump-Nssm([string]$svcName){
+  try { Exec -File $NssmExe -Args ("dump {0}" -f $svcName) -Step ("nssm dump {0}" -f $svcName) -NoThrow } catch {}
+}
+
+function Start-SvcRobusto {
+  param(
+    [Parameter(Mandatory)][string]$svcName,
+    [Parameter(Mandatory)][string]$OutLog,
+    [Parameter(Mandatory)][string]$ErrLog
+  )
+  Exec -File $NssmExe -Args ("start {0}" -f $svcName) -Step ("nssm start {0}" -f $svcName) -SuccessCodes @(0,1) -NoThrow
+
+  $deadline = (Get-Date).AddSeconds(25)
+  do {
+    Start-Sleep -Milliseconds 600
+    try { $st = Get-Service -Name $svcName -ErrorAction Stop } catch { Write-Log ("Não consegui ler status de {0}: {1}" -f $svcName, $_.Exception.Message) 'WARN'; break }
+    if ($st.Status -eq 'Running') { Write-Log ("Status {0}: {1}" -f $svcName,$st.Status) 'OK'; return }
+    if ($st.Status -in @('Paused','StartPending')) {
+      if ($st.Status -eq 'Paused') { Write-Log ("Serviço {0} está PAUSED. Tentando Resume..." -f $svcName) 'WARN' }
+      try { Resume-Service -Name $svcName -ErrorAction Stop } catch { Exec -File "$env:SystemRoot\System32\sc.exe" -Args ("continue {0}" -f $svcName) -NoThrow }
+    }
+  } while ((Get-Date) -lt $deadline)
+
+  try { $st = Get-Service -Name $svcName -ErrorAction Stop } catch {}
+  if (-not $st -or $st.Status -ne 'Running') {
+    Write-Log ("AVISO: {0} não está Running. Tail dos logs:" -f $svcName) 'WARN'
+    if (Test-Path $ErrLog) { (Get-Content $ErrLog -Tail 120 -ErrorAction SilentlyContinue) | ForEach-Object { Write-Log ("[ERR] {0}" -f $_) 'WARN' } }
+    if (Test-Path $OutLog) { (Get-Content $OutLog -Tail 120 -ErrorAction SilentlyContinue) | ForEach-Object { Write-Log ("[OUT] {0}" -f $_) 'WARN' } }
+    throw ("Serviço {0} não iniciou (status atual: {1})" -f $svcName, ($st.Status))
+  }
+}
+
+function Install-Svc {
+  param(
+    [Parameter(Mandatory)][string]$Name,
+    [Parameter(Mandatory)][string]$ExePath,
+    [Parameter(Mandatory)][string]$SvcLogsDir,
+    [string]$AppDirToUse = $null,
+    [string]$DependOn = $null,
+    [switch]$SkipNodeDetect,     # evita tratar como Node
+    [string]$HtmlEntry = $null   # se o EXE precisar do index.html
+  )
+
+  $svcName = $Name
+  $ExeDir  = Split-Path -Parent $ExePath
+  $AppDir  = if ($AppDirToUse) { $AppDirToUse } else { $ExeDir }
+
+  $null   = New-Item -ItemType Directory -Force -Path $SvcLogsDir | Out-Null
+  $OutLog = Join-Path $SvcLogsDir 'svc_out.log'
+  $ErrLog = Join-Path $SvcLogsDir 'svc_err.log'
+
+  $AppParams = $null
+
+  # --- Backend (Node) apenas se não pulado e EXE for Node host
+  if (-not $SkipNodeDetect -and (Is-NodeHost $ExePath)) {
+    $entry = Find-NodeEntry $AppDir
+    if (-not $entry) {
+      $dist = Join-Path $AppDir 'dist'
+      if (Test-Path $dist) {
+        Write-Log ("Conteúdo de {0}:" -f $dist)
+        Get-ChildItem $dist | ForEach-Object { Write-Log ("  - {0}" -f $_.FullName) }
+      } else {
+        Write-Log ("Pasta dist não existe em: {0}" -f $AppDir) 'WARN'
+      }
+      throw ("ATENÇÃO: Executável parece ser Node, mas não encontrei entrypoint (ex.: {0})." -f (Join-Path $AppDir 'dist\main.js'))
+    }
+    if (-not (Test-Path $entry)) { throw ("EntryPoint não encontrado: {0}" -f $entry) }
+    $AppParams = Make-AppParams-ABS $entry
+    Write-Log ("Detectado Node host. AppParameters={0}" -f $AppParams)
+  }
+
+  # --- Frontend: se HtmlEntry foi passado, usa como parâmetro
+  if ($HtmlEntry) {
+    if (-not (Test-Path $HtmlEntry)) { throw ("HtmlEntry não encontrado: {0}" -f $HtmlEntry) }
+    $AppParams = Make-AppParams-ABS $HtmlEntry
+    Write-Log ("HtmlEntry configurado: {0}" -f $HtmlEntry)
+  }
+
+  Write-Log ("Instalando {0}" -f $svcName)
+  Write-Log ("  Exe   : {0}" -f $ExePath)
+  Write-Log ("  AppDir: {0}" -f $AppDir)
+  Write-Log ("  Logs  : {0} | {1}" -f $OutLog,$ErrLog)
+
+  # limpa antes de instalar
+  Remove-Svc -Name $svcName
+
+  # instala (com retry em erro 5)
+  $installed = $false
+  for($i=1;$i -le 2 -and -not $installed;$i++){
+    try {
+      Exec -File $NssmExe -Args ("install {0} {1}" -f $svcName,(Q $ExePath)) -Step ("nssm install {0}" -f $svcName) -SuccessCodes @(0)
+      $installed = $true
+    } catch {
+      if ($_.Exception.Message -match 'failed \(5\)' -or $_.Exception.Message -match '\(5\):') {
+        Write-Log "Install retornou 5 (Access denied). Forçando limpeza e retry..." 'WARN'
+        Remove-Svc -Name $svcName
+        Start-Sleep -Milliseconds 800
+      } else { throw }
+    }
+  }
+  if (-not $installed) { throw "Não consegui instalar o serviço $svcName (erro 5 persistente)." }
+
+  # configurações NSSM
+  Exec -File $NssmExe -Args ("set {0} AppDirectory {1}"   -f $svcName,(Q $AppDir))
+  Exec -File $NssmExe -Args ("set {0} AppNoConsole 1"     -f $svcName)
+  Exec -File $NssmExe -Args ("set {0} AppStdout {1}"      -f $svcName,(Q $OutLog))
+  Exec -File $NssmExe -Args ("set {0} AppStderr {1}"      -f $svcName,(Q $ErrLog))
+  Exec -File $NssmExe -Args ("set {0} AppRestartDelay 5000" -f $svcName)
+  Exec -File $NssmExe -Args ("set {0} AppExit Default Restart" -f $svcName)
+  Exec -File $NssmExe -Args ("set {0} ObjectName LocalSystem" -f $svcName) -NoThrow
+  if ($AppParams) { Exec -File $NssmExe -Args ("set {0} AppParameters {1}" -f $svcName, $AppParams) }
+  if ($DependOn)  { Exec -File $NssmExe -Args ("set {0} DependOnService {1}" -f $svcName,$DependOn) }
+  Exec -File $NssmExe -Args ("set {0} Start SERVICE_AUTO_START" -f $svcName)
+  Exec -File "$env:SystemRoot\System32\sc.exe" -Args ("config {0} start= delayed-auto" -f $svcName)
+
+  Dump-Nssm $svcName
+
+  if ($StartNow -or $true) {
+    Start-SvcRobusto -svcName $svcName -OutLog $OutLog -ErrLog $ErrLog
+  }
+}
+
+# ───────────── execução ─────────────
+try {
+  if ($Pre) {
+    Write-Log 'PRE: parar/remover serviços'
+    Remove-Svc -Name $SvcBack
+    Remove-Svc -Name $SvcFront
+    Write-Log 'PRE ok' 'OK'
+  } else {
+    Write-Log 'Instalação INICIADA'
+
+    # BACKEND: Node (detecta main.js/entrypoint sozinho)
+    Install-Svc -Name $SvcBack `
+      -ExePath $BackExe `
+      -SvcLogsDir $BackSvcLogs
+
+    # FRONTEND: SEM detecção Node, opcional HtmlEntry
+    $frontExeDir = Split-Path -Parent $FrontExe
+    $htmlToUse = $null
+    if ($FrontHtmlPath) {
+      $htmlToUse = $FrontHtmlPath
+    } else {
+      $tryHtml = Join-Path $frontExeDir $FrontHtmlName
+      if (Test-Path $tryHtml) { $htmlToUse = $tryHtml }
+    }
+
+    if ($htmlToUse) {
+      Install-Svc -Name $SvcFront `
+        -ExePath $FrontExe `
+        -SvcLogsDir $FrontSvcLogs `
+        -DependOn $SvcBack `
+        -SkipNodeDetect `
+        -HtmlEntry $htmlToUse
+    } else {
+      Install-Svc -Name $SvcFront `
+        -ExePath $FrontExe `
+        -SvcLogsDir $FrontSvcLogs `
+        -DependOn $SvcBack `
+        -SkipNodeDetect
+    }
+
+    if ($StartNow) { Write-Log 'StartNow já aplicado (NSSM start após install).' }
+    Write-Log 'Instalação CONCLUÍDA' 'OK'
+  }
+}
+catch {
+  Write-Log ("ERRO geral: {0}" -f $_.Exception.Message) 'ERROR'
+  if ($_.InvocationInfo) {
+    Write-Log ("Onde: {0}:{1}" -f $_.InvocationInfo.ScriptName, $_.InvocationInfo.ScriptLineNumber) 'WARN'
+    Write-Log ("Linha: {0}" -f ($_.InvocationInfo.Line.Trim())) 'WARN'
+  }
+}
+
+Write-Log ("Log principal: {0}" -f $MainLog) 'OK'
+Write-Host ""
+Write-Host "Logs de runtime:"
+Write-Host "  Backend: $BackSvcLogs\svc_out.log | $BackSvcLogs\svc_err.log"
+Write-Host "  Front  : $FrontSvcLogs\svc_out.log | $FrontSvcLogs\svc_err.log"
+Write-Host ""
+pause
