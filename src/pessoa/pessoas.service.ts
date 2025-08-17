@@ -55,10 +55,18 @@ export class PessoasService {
       department: dept,
     }) as Pessoa;
 
-    const gruposEnt = await this.resolveGroupsForPessoa(!!visitante, grupos);
+    const gruposEnt = await this.resolveGroupsForPessoa(!!visitante, grupos, departmentId);
     if (gruposEnt.length) {
       pessoa.grupos = gruposEnt;
-      pessoa.department = gruposEnt[0].department; // garante coerência
+      pessoa.department = gruposEnt[0].department; // mantém coerência
+    }
+    else if (visitante) {
+      pessoa.grupos = [await this.getOrCreateGenericGroup()];
+      pessoa.department = pessoa.grupos[0].department; // garante que tenha um departamento
+    } else if (departmentId) {
+      const defaultGroup = await this.getOrCreateDefaultGroupForDept(departmentId);
+      pessoa.grupos = [defaultGroup];
+      pessoa.department = defaultGroup.department; // garante que tenha um departamento
     }
 
     const saved = await this.repo.save(pessoa);
@@ -208,19 +216,30 @@ export class PessoasService {
     return grupo;
   }
 
-  private async resolveGroupsForPessoa(visitante: boolean, gruposIds?: number[]): Promise<Grupo[]> {
+  private async getOrCreateDefaultGroupForDept(deptId: number): Promise<Grupo> {
+    let g = await this.grupoRepo.findOne({ where: { nome: 'DEFAULT', department: { id: deptId } }, relations: ['department'] });
+    if (!g) {
+      g = this.grupoRepo.create({ nome: 'DEFAULT', descricao: 'Grupo padrão', department: { id: deptId } as any });
+      await this.grupoRepo.save(g);
+      g = await this.grupoRepo.findOne({ where: { id: g.id }, relations: ['department'] }) as Grupo;
+    }
+    return g;
+  }
+
+  private async resolveGroupsForPessoa(visitante: boolean, gruposIds?: number[], deptIdForDefault?: number): Promise<Grupo[]> {
     if (visitante && (!gruposIds || !gruposIds.length)) {
       return [await this.getOrCreateGenericGroup()];
     }
-
     if (Array.isArray(gruposIds) && gruposIds.length) {
       const found = await this.grupoRepo.find({ where: { id: In(gruposIds) } });
-      if (found.length !== gruposIds.length) {
-        throw new BadRequestException('Algum grupo informado não foi encontrado');
-      }
+      if (found.length !== gruposIds.length) throw new BadRequestException('Algum grupo informado não foi encontrado');
       return found;
     }
-
+    // ↓↓↓ novo: default pra usuário comum
+    if (!visitante && deptIdForDefault) {
+      return [await this.getOrCreateDefaultGroupForDept(deptIdForDefault)];
+    }
     return [];
   }
+
 }
